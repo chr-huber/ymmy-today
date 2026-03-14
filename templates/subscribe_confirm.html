@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}ymmy · confirm subscription{% endblock %}
+{% block content %}
+<div class="text-center py-12">
+  {% if confirmed %}
+  <p class="text-2xl font-bold mb-3">You're subscribed!</p>
+  <p class="text-stone-500 dark:text-stone-400 mb-6">You'll get your first digest next Sunday.</p>
+  {% else %}
+  <p class="text-2xl font-bold mb-3">Link expired or already used</p>
+  <p class="text-stone-500 dark:text-stone-400 mb-6">This confirmation link is invalid. Try subscribing again.</p>
+  {% endif %}
+  <a href="/" class="text-finnish-600 hover:underline text-sm">Back to ymmy</a>
+</div>
+{% endblock %}

@@ -1,0 +1,40 @@
+# Service layer package for backend logic.
+
+from .news_service import (
+    CEFR_LEVELS,
+    DEFAULT_AUTO_MAX_AGE_HOURS,
+    DEFAULT_AUTO_TOP_N,
+    DEFAULT_TARGET_LANGUAGE,
+    DEFAULT_TARGET_LEVEL,
+    LEARNING_LANGUAGES,
+    MISTRAL_MODEL,
+    TRUSTED_SOURCES,
+    clear_database,
+    format_numbered_lines,
+    get_article,
+    get_or_create_auto_pick_run,
+    get_processing_stats,
+    get_pipeline_events,
+    get_quality_issues,
+    get_processing_log,
+    resolve_quality_issue,
+    get_saved_words,
+    ingest_from_rss,
+    init_db,
+    list_articles,
+    mark_article_read,
+    mark_article_unread,
+    mark_word_reviewed,
+    process_article,
+    run_auto_pipeline,
+    split_sentences,
+    to_int,
+    toggle_save_word,
+)
+
+from .admin_service import (
+    get_admin_dashboard,
+    get_cost_breakdown,
+    get_quality_control_summary,
+    resolve_multiple_issues,
+)

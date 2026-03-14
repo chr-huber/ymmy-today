@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Legal & Privacy — ymmy{% endblock %}
+
+{% block content %}
+
+<div class="flex items-center gap-3 mb-8">
+  <a href="/" class="text-stone-400 hover:text-stone-700 transition-colors">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+    </svg>
+  </a>
+  <h1 class="font-serif text-lg font-semibold">Legal & Privacy</h1>
+</div>
+
+<div class="space-y-8 max-w-2xl text-stone-600 leading-relaxed">
+
+  <div>
+    <h2 class="font-serif text-base font-semibold text-stone-800 mb-2">About this site</h2>
+    <p>ymmy is a personal, non-commercial project. It is not affiliated with any of the news sources it references. For questions or concerns, contact: <a href="mailto:hello@ymmy.today" class="text-finnish-700 hover:underline">hello@ymmy.today</a></p>
+  </div>
+
+  <div>
+    <h2 class="font-serif text-base font-semibold text-stone-800 mb-2">Data we store</h2>
+    <p>If you create an account, we store your username and a hashed (non-reversible) password. We also store which articles you have read and any vocabulary words you choose to save. No email address is collected. No data is shared with third parties.</p>
+  </div>
+
+  <div>
+    <h2 class="font-serif text-base font-semibold text-stone-800 mb-2">Cookies</h2>
+    <p>We use a single session cookie to keep you signed in. Anonymous visitors may have a language preference stored in a cookie. No tracking or advertising cookies are used.</p>
+  </div>
+
+  <div>
+    <h2 class="font-serif text-base font-semibold text-stone-800 mb-2">Content disclaimer</h2>
+    <p>Article summaries are generated automatically by AI and may contain errors. They are intended as a language-learning aid only. Always refer to the original source for accurate reporting.</p>
+  </div>
+
+  <div>
+    <h2 class="font-serif text-base font-semibold text-stone-800 mb-2">Your rights</h2>
+    <p>You may request deletion of your account and all associated data at any time by contacting us at the address above.</p>
+  </div>
+
+</div>
+
+{% endblock %}

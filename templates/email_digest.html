@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your weekly {{ language }} digest</title>
+  <style>
+    body { margin: 0; padding: 0; background: #f5f4f2; font-family: 'Helvetica Neue', Arial, sans-serif; color: #1c1917; }
+    .wrapper { max-width: 580px; margin: 32px auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e7e5e4; }
+    .header { background: #ffffff; padding: 28px 32px 20px; border-bottom: 1px solid #e7e5e4; }
+    .header-title { font-size: 22px; font-weight: 700; color: #1c1917; margin: 0 0 4px; letter-spacing: -0.3px; }
+    .header-sub { font-size: 13px; color: #78716c; margin: 0; }
+    .content { padding: 24px 32px; }
+    .intro { font-size: 14px; color: #57534e; margin: 0 0 24px; line-height: 1.6; }
+    .article { border-bottom: 1px solid #f0ede9; padding-bottom: 20px; margin-bottom: 20px; }
+    .article:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .badges { display: inline-flex; gap: 6px; margin-bottom: 8px; }
+    .badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; letter-spacing: 0.3px; }
+    .badge-topic { background: #f5f4f2; color: #57534e; }
+    .badge-level { background: #e8f0fe; color: #3b5bdb; }
+    .article-title { font-size: 16px; font-weight: 600; color: #1c1917; margin: 0 0 6px; line-height: 1.4; }
+    .article-title a { color: #1c1917; text-decoration: none; }
+    .article-title a:hover { text-decoration: underline; }
+    .article-preview { font-size: 14px; color: #57534e; margin: 0 0 10px; line-height: 1.6; }
+    .read-link { font-size: 13px; font-weight: 500; color: #3b5bdb; text-decoration: none; }
+    .read-link:hover { text-decoration: underline; }
+    .footer { background: #f5f4f2; padding: 20px 32px; border-top: 1px solid #e7e5e4; text-align: center; }
+    .footer p { font-size: 12px; color: #a8a29e; margin: 0 0 6px; line-height: 1.5; }
+    .footer a { color: #78716c; text-decoration: underline; }
+    .no-articles { font-size: 14px; color: #78716c; text-align: center; padding: 24px 0; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+
+    <div class="header">
+      <p class="header-title">ymmy</p>
+      <p class="header-sub">Your weekly {{ language }} digest &middot; {{ week_label }}</p>
+    </div>
+
+    <div class="content">
+      <p class="intro">
+        Here are this week's simplified news articles in {{ language }}{% if level and level != 'all levels' %} at <strong>{{ level }}</strong>{% endif %}.
+        Read them on ymmy to practice and save new vocabulary.
+      </p>
+
+      {% if articles %}
+        {% for article in articles %}
+        <div class="article">
+          <div class="badges">
+            <span class="badge badge-topic">{{ article.topic }}</span>
+            <span class="badge badge-level">{{ article.level }}</span>
+          </div>
+          <p class="article-title">
+            <a href="{{ article.article_url }}">{{ article.title }}</a>
+          </p>
+          {% if article.preview %}
+          <p class="article-preview">{{ article.preview }}</p>
+          {% endif %}
+          <a class="read-link" href="{{ article.article_url }}">Read article &rarr;</a>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p class="no-articles">No new articles this week. Check back next Sunday!</p>
+      {% endif %}
+    </div>
+
+    <div class="footer">
+      <p>You're receiving this because you subscribed to ymmy's weekly digest.</p>
+      <p><a href="{{ unsubscribe_url }}">Unsubscribe</a> &nbsp;&middot;&nbsp; <a href="{{ base_url }}">Visit ymmy</a></p>
+    </div>
+
+  </div>
+</body>
+</html>

@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}Quality Control - ymmy{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="flex justify-between items-center mb-8">
+        <h1 class="text-3xl font-bold text-gray-800">⚠️ Quality Control</h1>
+        <div class="text-sm text-gray-500">
+            {{ qc_data.open_issues }} open issues • {{ qc_data.resolved_issues }} resolved
+        </div>
+    </div>
+    
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div class="bg-white p-6 rounded-lg shadow border">
+            <div class="text-3xl font-bold text-red-600">{{ qc_data.open_issues }}</div>
+            <div class="text-gray-500 mt-2">Open Issues</div>
+        </div>
+        
+        <div class="bg-white p-6 rounded-lg shadow border">
+            <div class="text-3xl font-bold text-green-600">{{ qc_data.resolved_issues }}</div>
+            <div class="text-gray-500 mt-2">Resolved Issues</div>
+        </div>
+    </div>
+    
+    <!-- By Type and Language -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div class="bg-white p-6 rounded-lg shadow border">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">By Issue Type</h2>
+            {% if qc_data.by_type %}
+            <div class="space-y-2">
+                {% for type, count in qc_data.by_type.items() %}
+                <div class="flex justify-between py-1">
+                    <span class="capitalize">{{ type }}</span>
+                    <span class="font-mono bg-gray-100 px-2 py-1 rounded">{{ count }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-gray-500">No issues by type.</p>
+            {% endif %}
+        </div>
+        
+        <div class="bg-white p-6 rounded-lg shadow border">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">By Language</h2>
+            {% if qc_data.by_language %}
+            <div class="space-y-2">
+                {% for lang, count in qc_data.by_language.items() %}
+                <div class="flex justify-between py-1">
+                    <span>{{ lang }}</span>
+                    <span class="font-mono bg-gray-100 px-2 py-1 rounded">{{ count }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-gray-500">No issues by language.</p>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Recent Issues -->
+    <div class="bg-white p-6 rounded-lg shadow border mb-8">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-semibold text-gray-700">Recent Quality Issues</h2>
+            {% if qc_data.open_issues > 0 %}
+            <button 
+                id="resolve-all-btn"
+                class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+                onclick="resolveAllIssues()"
+            >
+                ✓ Resolve All
+            </button>
+            {% endif %}
+        </div>
+        
+        {% if qc_data.recent_issues %}
+        <div class="space-y-4" id="issues-list">
+            {% for issue in qc_data.recent_issues %}
+            <div class="border rounded-lg p-4 issue-item" data-issue-id="{{ issue.id }}">
+                <div class="flex justify-between items-start mb-2">
+                    <h3 class="font-medium text-gray-800">{{ issue.article_title[:70] }}...</h3>
+                    <span class="text-sm px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full">{{ issue.severity }}</span>
+                </div>
+                
+                <div class="text-sm text-gray-500 mb-2">
+                    {{ issue.target_language }} {{ issue.target_level }} • 
+                    {{ issue.issue_type }} • 
+                    {{ issue.created_at[:16] }}
+                </div>
+                
+                <div class="text-gray-700 mb-3">
+                    {{ issue.issue_description }}
+                </div>
+                
+                <div class="flex space-x-2">
+                    <button 
+                        class="resolve-btn px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
+                        data-issue-id="{{ issue.id }}"
+                        onclick="resolveIssue({{ issue.id }}, this)"
+                    >
+                        ✓ Resolve
+                    </button>
+                    <a 
+                        href="/article/{{ issue.article_id }}"
+                        class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+                    >
+                        📖 View Article
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-12">
+            <div class="text-4xl mb-4">🎉</div>
+            <p class="text-gray-500">No open quality issues!</p>
+            <p class="text-sm text-gray-400 mt-2">All content meets quality standards.</p>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Navigation -->
+    <div class="bg-white p-6 rounded-lg shadow border">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <a href="/admin" class="block p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors text-center">
+                <div class="font-medium text-gray-600">← Back to Dashboard</div>
+            </a>
+            <a href="/admin/costs" class="block p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors text-center">
+                <div class="font-medium text-green-600">💰 Cost Analysis</div>
+            </a>
+            <a href="/" class="block p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors text-center">
+                <div class="font-medium text-purple-600">📖 Reader View</div>
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+function resolveIssue(issueId, button) {
+    const issueElement = button.closest('.issue-item');
+    
+    fetch(`/api/admin/resolve-issue/${issueId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            issueElement.style.display = 'none';
+            // Show success message
+            const successMsg = document.createElement('div');
+            successMsg.className = 'bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4';
+            successMsg.textContent = 'Issue resolved successfully!';
+            document.getElementById('issues-list').prepend(successMsg);
+            
+            // Update counters
+            setTimeout(() => location.reload(), 1000);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Failed to resolve issue');
+    });
+}
+
+function resolveAllIssues() {
+    if (!confirm('Are you sure you want to resolve ALL open quality issues?')) {
+        return;
+    }
+    
+    const issueIds = Array.from(document.querySelectorAll('.resolve-btn')).map(btn => btn.dataset.issueId);
+    
+    fetch('/api/admin/resolve-multiple', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `issue_ids=${issueIds.join(',')}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        alert(`Resolved ${data.resolved}/${data.total} issues`);
+        location.reload();
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Failed to resolve issues');
+    });
+}
+</script>
+{% endblock %}

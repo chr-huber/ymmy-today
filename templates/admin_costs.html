@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Cost Analysis - ymmy{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="flex justify-between items-center mb-8">
+        <h1 class="text-3xl font-bold text-gray-800">💰 Cost Analysis</h1>
+        <div class="text-sm text-gray-500">
+            Updated: {{ "now"|date("Y-m-d H:i") }}
+        </div>
+    </div>
+    
+    <!-- Main Cost Metrics -->
+    <div class="bg-white p-6 rounded-lg shadow border mb-8">
+        <h2 class="text-xl font-semibold text-gray-700 mb-6">Cost Overview</h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="text-center">
+                <div class="text-3xl font-bold text-purple-600 mb-2">${{ "%.4f"|format(cost_data.overall.estimated_cost_usd) }}</div>
+                <div class="text-gray-500">Estimated Total Cost</div>
+            </div>
+            
+            <div class="text-center">
+                <div class="text-3xl font-bold text-blue-600 mb-2">{{ "{:,}".format(cost_data.overall.total_tokens) }}</div>
+                <div class="text-gray-500">Total Tokens Used</div>
+            </div>
+            
+            <div class="text-center">
+                <div class="text-3xl font-bold text-green-600 mb-2">{{ cost_data.overall.total_processed }}</div>
+                <div class="text-gray-500">Articles Processed</div>
+            </div>
+        </div>
+        
+        <div class="mt-6 pt-6 border-t">
+            <p class="text-sm text-gray-600 mb-2">📊 Cost is estimated at <strong>$0.20 per 100K tokens</strong> based on typical Mistral API pricing.</p>
+            <p class="text-sm text-gray-500">Actual costs may vary based on your specific API plan and usage.</p>
+        </div>
+    </div>
+    
+    <!-- Efficiency Metrics -->
+    <div class="bg-white p-6 rounded-lg shadow border mb-8">
+        <h2 class="text-xl font-semibold text-gray-700 mb-4">Efficiency Metrics</h2>
+        
+        {% if cost_data.overall.total_processed > 0 %}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-gray-50 p-4 rounded-lg">
+                <div class="text-2xl font-bold text-green-600">
+                    {{ "%.0f"|format(cost_data.overall.total_tokens / cost_data.overall.total_processed) }}
+                </div>
+                <div class="text-gray-600 text-sm">Average tokens per article</div>
+            </div>
+            
+            <div class="bg-gray-50 p-4 rounded-lg">
+                <div class="text-2xl font-bold text-blue-600">
+                    ${{ "%.4f"|format(cost_data.overall.estimated_cost_usd / cost_data.overall.total_processed) }}
+                </div>
+                <div class="text-gray-600 text-sm">Average cost per article</div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Cache Efficiency -->
+    <div class="bg-white p-6 rounded-lg shadow border mb-8">
+        <h2 class="text-xl font-semibold text-gray-700 mb-4">Cache Efficiency</h2>
+        
+        <div class="space-y-3">
+            <div class="flex justify-between py-2 border-b">
+                <span class="text-gray-600">Cached LLM Responses</span>
+                <span class="font-mono">{{ cost_data.overall.cache_entries }}</span>
+            </div>
+            
+            {% if cost_data.overall.total_processed > 0 %}
+            <div class="flex justify-between py-2 border-b">
+                <span class="text-gray-600">Cache Hit Potential</span>
+                <span class="font-mono">
+                    {{ "%.1f"|format((cost_data.overall.cache_entries / cost_data.overall.total_processed * 100) }}%
+                </span>
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="mt-4 p-3 bg-blue-50 rounded-lg">
+            <p class="text-sm text-blue-800">
+                💡 <strong>Cache saves money</strong> by avoiding duplicate LLM calls for the same content.
+                Each cached response represents potential cost savings!
+            </p>
+        </div>
+    </div>
+    
+    <!-- Cost Breakdown -->
+    <div class="bg-white p-6 rounded-lg shadow border mb-8">
+        <h2 class="text-xl font-semibold text-gray-700 mb-4">Cost Breakdown</h2>
+        
+        <div class="space-y-4">
+            <div>
+                <h3 class="font-medium text-gray-700 mb-2">By Processing Status</h3>
+                {% if cost_data.overall.stats.status_counts %}
+                <div class="space-y-2">
+                    {% for status, count in cost_data.overall.stats.status_counts.items() %}
+                    <div class="flex justify-between text-sm">
+                        <span class="capitalize">{{ status }}</span>
+                        <span class="font-mono">{{ count }} articles</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-gray-500 text-sm">No status breakdown available.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Navigation -->
+    <div class="bg-white p-6 rounded-lg shadow border">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <a href="/admin" class="block p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors text-center">
+                <div class="font-medium text-gray-600">← Back to Dashboard</div>
+            </a>
+            <a href="/admin/quality" class="block p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors text-center">
+                <div class="font-medium text-blue-600">⚠️ Quality Control</div>
+            </a>
+            <a href="/" class="block p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors text-center">
+                <div class="font-medium text-purple-600">📖 Reader View</div>
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

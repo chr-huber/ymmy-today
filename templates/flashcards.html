@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Flashcards — ymmy{% endblock %}
+
+{% block content %}
+
+<div class="flex items-center gap-3 mb-6">
+  <a href="/" class="text-stone-400 dark:text-stone-500 hover:text-stone-700 transition-colors">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+    </svg>
+  </a>
+  <h1 class="font-serif text-lg font-semibold">Flashcards</h1>
+  <span class="text-sm text-stone-400 dark:text-stone-500">{{ words|length }} due</span>
+</div>
+
+{% if not words %}
+<div class="text-center py-16 text-stone-400 dark:text-stone-500">
+  <p class="text-4xl mb-3">⚡</p>
+  <p class="font-medium mb-1">No words due for review</p>
+  <p class="text-sm">Save words using ☆ while reading articles</p>
+</div>
+
+{% else %}
+
+<script>
+  const _fcWords = {{ words | tojson }};
+
+  function fcApp() {
+    return {
+      cards: [..._fcWords],
+      idx: 0,
+      revealed: false,
+      knewCount: 0,
+      reviewing: false,
+      error: null,
+
+      get card() { return this.cards[this.idx] || null; },
+      get done() { return this.idx >= this.cards.length; },
+      get progress() {
+        return this.cards.length ? Math.round(this.idx / this.cards.length * 100) : 100;
+      },
+
+      async review(knew) {
+        if (!this.card || this.reviewing) return;
+        this.reviewing = true;
+        this.error = null;
+        try {
+          const body = new URLSearchParams({ knew_it: knew ? 'true' : 'false' });
+          const r = await fetch('/api/review/' + this.card.id, { method: 'POST', body });
+          if (!r.ok) throw new Error('Server error');
+          if (knew) this.knewCount++;
+          this.idx++;
+          this.revealed = false;
+        } catch (e) {
+          this.error = 'Could not save — check your connection and try again.';
+        } finally {
+          this.reviewing = false;
+        }
+      },
+
+      restart() {
+        this.cards = [..._fcWords];
+        this.idx = 0;
+        this.revealed = false;
+        this.knewCount = 0;
+        this.error = null;
+      }
+    };
+  }
+</script>
+
+<div class="max-w-lg mx-auto" x-data="fcApp()">
+
+  <!-- Done -->
+  <template x-if="done">
+    <div class="text-center py-12">
+      <p class="text-4xl mb-3">🎉</p>
+      <p class="font-serif text-xl font-semibold mb-1">Session complete</p>
+      <p class="text-sm text-stone-500 dark:text-stone-400 mb-5">
+        <span x-text="knewCount"></span> known ·
+        <span x-text="cards.length - knewCount"></span> to review again
+      </p>
+      <button @click="restart()"
+              class="px-6 py-2.5 rounded-xl bg-finnish-600 text-white font-medium text-sm hover:bg-finnish-700 transition-colors">
+        Review again
+      </button>
+    </div>
+  </template>
+
+  <!-- Card -->
+  <template x-if="!done">
+    <div>
+      <!-- Progress -->
+      <div class="flex items-center gap-3 mb-6">
+        <div class="flex-1 h-1.5 bg-stone-200 dark:bg-stone-700 rounded-full overflow-hidden">
+          <div class="h-full bg-finnish-500 rounded-full transition-all"
+               :style="'width: ' + progress + '%'"></div>
+        </div>
+        <span class="text-xs text-stone-400 dark:text-stone-500 flex-shrink-0"
+              x-text="idx + ' / ' + cards.length"></span>
+      </div>
+
+      <!-- Card face -->
+      <div class="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-700 shadow-sm overflow-hidden mb-4">
+        <div class="p-8 text-center border-b border-stone-100 dark:border-stone-700">
+          <p class="text-xs text-stone-400 dark:text-stone-500 mb-2"
+             x-text="(card.article_title || '').slice(0, 50) + ((card.article_title || '').length > 50 ? '…' : '')"></p>
+          <p class="text-3xl font-serif font-semibold text-stone-800 dark:text-stone-100 mb-1" x-text="card.base_form"></p>
+          <p class="text-sm text-stone-400 dark:text-stone-500 italic" x-text="card.used_form"></p>
+        </div>
+        <!-- Answer reveal -->
+        <div x-show="revealed" x-cloak class="p-6 bg-finnish-50 dark:bg-finnish-900/20">
+          <div class="text-center">
+            <p class="text-xl font-medium text-finnish-800 dark:text-finnish-200 mb-1" x-text="card.translation"></p>
+            <p class="text-sm text-finnish-600 dark:text-finnish-300 italic mb-3" x-text="card.used_form_translation"></p>
+            <span class="text-xs bg-finnish-100 dark:bg-finnish-900/30 text-finnish-700 dark:text-finnish-300 px-2 py-0.5 rounded-full"
+                  x-text="card.grammatical_form"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Show answer -->
+      <template x-if="!revealed">
+        <button @click="revealed = true"
+                class="w-full py-3 rounded-xl bg-stone-800 dark:bg-stone-700 text-white font-medium text-sm hover:bg-stone-700 dark:hover:bg-stone-600 transition-colors">
+          Show answer
+        </button>
+      </template>
+
+      <!-- Error message -->
+      <template x-if="error">
+        <p class="text-sm text-red-500 text-center mb-3" x-text="error"></p>
+      </template>
+
+      <!-- Verdict buttons -->
+      <template x-if="revealed">
+        <div class="grid grid-cols-2 gap-3">
+          <button @click="review(false)" :disabled="reviewing"
+                  class="py-3 rounded-xl border-2 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 font-medium text-sm hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40">
+            ✗ Didn't know
+          </button>
+          <button @click="review(true)" :disabled="reviewing"
+                  class="py-3 rounded-xl border-2 border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 font-medium text-sm hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors disabled:opacity-40">
+            ✓ Knew it
+          </button>
+        </div>
+      </template>
+    </div>
+  </template>
+
+</div>
+{% endif %}
+
+{% endblock %}

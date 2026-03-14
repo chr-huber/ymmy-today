@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}FAQ — ymmy{% endblock %}
+
+{% block content %}
+
+<div class="flex items-center gap-3 mb-8">
+  <a href="/" class="text-stone-400 hover:text-stone-700 transition-colors">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+    </svg>
+  </a>
+  <h1 class="font-serif text-lg font-semibold">Frequently Asked Questions</h1>
+</div>
+
+<div class="space-y-8 max-w-2xl">
+
+  <div>
+    <h2 class="font-serif text-base font-semibold mb-2">What is ymmy?</h2>
+    <p class="text-stone-600 leading-relaxed">
+      A daily news digest for language learners. We take real headlines from trusted international sources and rewrite them into short, simple summaries at different difficulty levels — A1, A2, and B1 on the CEFR scale. The idea: stay informed in the language you're learning, without needing a dictionary open on the side.
+    </p>
+  </div>
+
+  <div>
+    <h2 class="font-serif text-base font-semibold mb-2">How are the summaries made?</h2>
+    <p class="text-stone-600 leading-relaxed">
+      A two-step AI pipeline. First, Mistral Small rewrites each article into simplified sentences appropriate for the target CEFR level. Then Claude Sonnet reviews the output for grammar accuracy and level consistency. Neither model invents facts — they only work with what's in the original article.
+    </p>
+  </div>
+
+  <div>
+    <h2 class="font-serif text-base font-semibold mb-2">How accurate are they?</h2>
+    <p class="text-stone-600 leading-relaxed">
+      Very good, but not perfect. AI language models handle everyday news well, but nuance, idiom, and edge cases in grammar can slip through. Treat each summary as a learning aid, not a definitive source. Every article links back to the original — check it if something seems off.
+    </p>
+  </div>
+
+  <div>
+    <h2 class="font-serif text-base font-semibold mb-2">Why only ~16 articles a day?</h2>
+    <p class="text-stone-600 leading-relaxed">
+      Deliberate. Language learning research (and common sense) points to <em>comprehensible input</em> — material that's just slightly challenging, absorbed in manageable amounts. A short, focused reading session beats an endless scroll. We refresh the digest 4 times a day so there's always something new, without the overwhelm.
+    </p>
+  </div>
+
+  <div>
+    <h2 class="font-serif text-base font-semibold mb-2">What are the difficulty levels?</h2>
+    <p class="text-stone-600 leading-relaxed">
+      We use the Common European Framework of Reference for Languages (CEFR):
+    </p>
+    <ul class="mt-2 space-y-1 text-stone-600 text-sm">
+      <li><span class="font-medium text-stone-800">A1</span> — Beginner. Short sentences, present tense, everyday words.</li>
+      <li><span class="font-medium text-stone-800">A2</span> — Elementary. A little more complexity, simple past and future.</li>
+      <li><span class="font-medium text-stone-800">B1</span> — Intermediate. Compound sentences, passive voice, wider vocabulary.</li>
+    </ul>
+    <p class="mt-2 text-stone-600 leading-relaxed text-sm">
+      You can switch levels at any time from the menu — or filter by level on the main page.
+    </p>
+  </div>
+
+  <div>
+    <h2 class="font-serif text-base font-semibold mb-2">What's the word bank and flashcards for?</h2>
+    <p class="text-stone-600 leading-relaxed">
+      While reading, you can save any vocabulary word with the ☆ button. Saved words go into your personal <strong>Word Bank</strong> — a browsable reference of everything you've collected. The <strong>Flashcards</strong> view turns those words into a spaced-repetition review session, scheduling each word to reappear at the right interval based on whether you knew it or not.
+    </p>
+  </div>
+
+  <div>
+    <h2 class="font-serif text-base font-semibold mb-2">Do I need an account?</h2>
+    <p class="text-stone-600 leading-relaxed">
+      No. You can read freely without signing in. An account is only needed if you want to save words, track what you've read, or use the flashcard system. If you'd like one, get in touch.
+    </p>
+  </div>
+
+  <div>
+    <h2 class="font-serif text-base font-semibold mb-2">How much does it cost?</h2>
+    <p class="text-stone-600 leading-relaxed">
+      ymmy is free to use. It's a passion project. If you find it useful and want to help keep the servers running, a coffee is always appreciated.
+    </p>
+  </div>
+
+</div>
+
+{% endblock %}

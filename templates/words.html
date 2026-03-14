@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Word Bank — ymmy{% endblock %}
+
+{% block content %}
+
+<div class="flex items-center gap-3 mb-6">
+  <a href="/" class="text-stone-400 dark:text-stone-500 hover:text-stone-700 transition-colors">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+    </svg>
+  </a>
+  <h1 class="font-serif text-lg font-semibold">Word Bank</h1>
+  <span class="text-sm text-stone-400 dark:text-stone-500">{{ words|length }} saved</span>
+  {% if due_count %}
+  <a href="/flashcards"
+      class="ml-auto text-xs px-3 py-1.5 rounded-lg bg-finnish-600 text-white font-medium hover:bg-finnish-700 transition-colors flex items-center gap-1.5">
+    <span>⚡</span> Review {{ due_count }} due
+  </a>
+  {% endif %}
+</div>
+
+{% if not words %}
+<div class="text-center py-16 text-stone-400 dark:text-stone-500">
+  <p class="text-4xl mb-3">📖</p>
+  <p class="font-medium mb-1">No words saved yet</p>
+  <p class="text-sm">Tap ☆ next to any word while reading an article</p>
+</div>
+
+{% else %}
+<div class="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 overflow-hidden" x-data>
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-stone-100 dark:border-stone-700 bg-stone-50 dark:bg-stone-800">
+        <th class="text-left py-2 px-4 font-medium text-stone-400 dark:text-stone-500 text-xs uppercase tracking-wide">Word</th>
+        <th class="text-left py-2 px-3 font-medium text-stone-400 dark:text-stone-500 text-xs uppercase tracking-wide">English</th>
+        <th class="text-left py-2 px-3 font-medium text-stone-400 dark:text-stone-500 text-xs uppercase tracking-wide hidden sm:table-cell">Form</th>
+        <th class="text-left py-2 px-3 font-medium text-stone-400 dark:text-stone-500 text-xs uppercase tracking-wide hidden md:table-cell">Article</th>
+        <th class="text-right py-2 px-4 font-medium text-stone-400 dark:text-stone-500 text-xs uppercase tracking-wide">Status</th>
+        <th class="py-2 px-4"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for word in words %}
+      <tr class="border-b border-stone-50 dark:border-stone-800 hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors"
+          x-data="{ visible: true }" x-show="visible">
+        <td class="py-2.5 px-4 font-medium">
+          {% if settings.language == 'German' %}
+           {% set lookup_word = word.base_form %}
+           {% set article_tokens = ['der', 'die', 'das', 'den', 'dem', 'des', 'ein', 'eine', 'einen', 'einem', 'einer', 'eines'] %}
+           {% set parts = word.base_form.split(' ', 1) %}
+           {% if parts|length > 1 and parts[0]|lower in article_tokens %}
+           {% set lookup_word = parts[1] %}
+           {% endif %}
+           <a href="https://www.dwds.de/wb/{{ lookup_word | urlencode }}" target="_blank" rel="noopener"
+             class="hover:text-finnish-700 hover:underline transition-colors">{{ lookup_word }}</a>
+          {% else %}
+          {{ word.base_form }}
+          {% endif %}
+        </td>
+        <td class="py-2.5 px-3 text-stone-600 dark:text-stone-300">{{ word.translation }}</td>
+        <td class="py-2.5 px-3 text-stone-400 dark:text-stone-500 text-xs hidden sm:table-cell">{{ word.grammatical_form }}</td>
+        <td class="py-2.5 px-3 hidden md:table-cell">
+          <a href="/article/{{ word.article_id }}"
+             class="text-stone-400 dark:text-stone-500 hover:text-finnish-700 transition-colors truncate block max-w-[180px]">
+            {{ word.article_title[:50] }}{% if word.article_title|length > 50 %}…{% endif %}
+          </a>
+        </td>
+        <td class="py-2.5 px-4 text-right">
+          {% if not word.next_review_at or word.next_review_at <= now_iso %}
+          <span class="text-xs px-2 py-0.5 rounded-full bg-finnish-50 dark:bg-finnish-900/20 text-finnish-700 dark:text-finnish-300">Due now</span>
+          {% else %}
+          <span class="text-xs px-2 py-0.5 rounded-full bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400">{{ word.review_count }}× reviewed</span>
+          {% endif %}
+        </td>
+        <td class="py-2.5 px-4 text-right">
+          <button
+            @click="
+              fetch('/api/toggle-save/{{ word.id }}', { method: 'POST' })
+                .then(r => r.json()).then(d => { if (!d.saved) visible = false; })
+            "
+            class="text-stone-300 dark:text-stone-600 hover:text-red-400 transition-colors text-lg"
+            title="Remove from word bank">
+            ×
+          </button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,20 @@
+pipelines:
+  custom:
+    run-pipeline:
+      - step:
+          name: Run pipeline
+          image: curlimages/curl
+          script:
+            - curl -s -X POST
+              -u ":$ADMIN_PASSWORD"
+              https://ymmy.fly.dev/admin/run
+              -d "top_n=4&levels=A1&levels=A2&languages=Finnish"
+
+    send-digest:
+      - step:
+          name: Send weekly newsletter digest
+          image: curlimages/curl
+          script:
+            - curl -s -X POST
+              -u ":$ADMIN_PASSWORD"
+              https://ymmy.fly.dev/admin/send-digest

@@ -1,0 +1,13 @@
+.venv/
+.claude/
+.vscode/
+__pycache__/
+*.pyc
+.env
+*.db
+*.db-info
+*.db-shm
+*.db-wal
+tailwindcss
+*.log
+static/css/tailwind.css

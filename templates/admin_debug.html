@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto py-6 px-4 space-y-4">
+    <div class="flex items-center justify-between">
+        <h1 class="font-serif text-xl font-semibold">Pipeline Activity</h1>
+        <a href="/admin" class="text-sm px-3 py-1.5 rounded-lg border border-stone-200 hover:bg-stone-50">← Back to Admin</a>
+    </div>
+
+    <div class="bg-white rounded-xl border border-stone-200 p-4">
+        <p class="text-sm text-stone-500">Shows stage events for ingest + ranking + enrichment + classification + processing.</p>
+    </div>
+
+    <div class="bg-white rounded-xl border border-stone-200 overflow-hidden">
+        <div class="px-4 py-3 border-b border-stone-100 flex items-center justify-between">
+            <h2 class="font-serif font-semibold">Stage Events by Run</h2>
+            <span class="text-xs text-stone-400">{{ grouped_event_logs|length }} run{{ 's' if grouped_event_logs|length != 1 else '' }}</span>
+        </div>
+        {% if not grouped_event_logs %}
+            <p class="text-sm text-stone-400 px-4 py-6">No stage events yet. Run ingest or pipeline from admin.</p>
+        {% else %}
+            <div class="max-h-[560px] overflow-y-auto divide-y divide-stone-100">
+                {% for run in grouped_event_logs %}
+                <details class="group" {% if loop.first %}open{% endif %}>
+                    <summary class="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-stone-50">
+                        <div class="min-w-0">
+                            <p class="text-sm font-medium text-stone-700 truncate">
+                                {{ run.run_type }} · {{ run.run_id }}
+                                {% if run.provider %}
+                                  {% set parts = run.provider.split('/') %}
+                                  {% if parts|length == 2 %}
+                                    <span class="text-stone-400"> · step1: {{ parts[0] }} · step2: {{ parts[1] }}</span>
+                                  {% else %}
+                                    <span class="text-stone-400"> · {{ run.provider }}</span>
+                                  {% endif %}
+                                {% endif %}
+                            </p>
+                            <p class="text-xs text-stone-400">{{ run.created_at[:19].replace('T', ' ') if run.created_at else '' }}</p>
+                        </div>
+                        <span class="text-xs text-stone-400">{{ run.entries|length }} event{{ 's' if run.entries|length != 1 else '' }}</span>
+                    </summary>
+                    <div class="border-t border-stone-50 divide-y divide-stone-50">
+                        {% for entry in run.entries %}
+                        <div class="px-4 py-2.5 grid grid-cols-12 gap-3 items-start hover:bg-stone-50">
+                            <div class="col-span-2 text-xs text-stone-400">{{ entry.created_at[:19].replace('T', ' ') if entry.created_at else '' }}</div>
+                            <div class="col-span-1 text-xs text-stone-500">{{ entry.stage }}</div>
+                            <div class="col-span-1 text-xs {% if entry.level == 'error' %}text-red-500{% elif entry.level == 'warning' %}text-amber-600{% else %}text-green-600{% endif %}">{{ entry.level }}</div>
+                            <div class="col-span-8 text-sm text-stone-700 break-words">
+                                {{ entry.message }}
+                                {% if entry.article_title %}
+                                <span class="text-xs text-stone-400"> · {{ entry.article_title }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </details>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="bg-white rounded-xl border border-stone-200 overflow-hidden">
+        <div class="px-4 py-3 border-b border-stone-100 flex items-center justify-between">
+            <h2 class="font-serif font-semibold">Per-Article Processing</h2>
+            <span class="text-xs text-stone-400">{{ processing_log|length }} latest</span>
+        </div>
+        {% if not processing_log %}
+            <p class="text-sm text-stone-400 px-4 py-6">No processing entries yet.</p>
+        {% else %}
+            <div class="divide-y divide-stone-50 max-h-[420px] overflow-y-auto">
+                {% for entry in processing_log %}
+                <div class="px-4 py-2.5 flex items-center gap-3 hover:bg-stone-50">
+                    <span class="text-xs w-14 flex-shrink-0 {% if entry.status == 'success' %}text-green-600{% elif entry.status == 'error' %}text-red-500{% else %}text-amber-500{% endif %}">{{ entry.status }}</span>
+                    <span class="text-xs text-stone-400 w-14 flex-shrink-0">{{ entry.target_language }}</span>
+                    <span class="text-xs text-stone-400 w-8 flex-shrink-0">{{ entry.target_level }}</span>
+                    <p class="text-sm text-stone-700 truncate flex-1">{{ entry.article_title }}</p>
+                    {% if entry.error_message %}
+                    <span class="text-xs text-red-400 truncate max-w-xs">{{ entry.error_message }}</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

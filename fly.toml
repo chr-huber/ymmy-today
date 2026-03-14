@@ -1,0 +1,29 @@
+# fly.toml app configuration file generated for ymmy on 2026-03-11T10:27:46+02:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'ymmy'
+primary_region = 'ams'
+
+[build]
+
+[env]
+  DATABASE_PATH = '/data/news.db'
+  PORT = '8080'
+
+[[mounts]]
+  source = 'ymmy_data'
+  destination = '/data'
+  initial_size = '1gb'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '256mb'
