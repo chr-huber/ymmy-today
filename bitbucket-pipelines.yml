@@ -6,7 +6,7 @@ pipelines:
           image: curlimages/curl
           script:
             - curl -sf --max-time 600 -X POST
-              -u "$ADMIN_USERNAME:$ADMIN_PASSWORD"
+              -u "admin:$ADMIN_PASSWORD"
               https://ymmy.fly.dev/admin/run
               -d "top_n=4&levels=A1&levels=A2&languages=Finnish"
 
@@ -16,5 +16,5 @@ pipelines:
           image: curlimages/curl
           script:
             - curl -sf --max-time 120 -X POST
-              -u "$ADMIN_USERNAME:$ADMIN_PASSWORD"
+              -u "admin:$ADMIN_PASSWORD"
               https://ymmy.fly.dev/admin/send-digest
