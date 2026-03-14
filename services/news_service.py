@@ -1758,7 +1758,7 @@ Content: {article_text}
     step2_prompt = f"""You are a {target_language} language expert reviewing text written for language learners at multiple CEFR levels: {levels_str}.
 
 Fix any: grammar errors, wrong case endings{f', vowel harmony mistakes' if target_language == 'Finnish' else ''}, unnatural phrasing, complexity exceeding the level.
-Topic vocabulary being advanced is intentional — do not simplify it.
+Topic vocabulary being advanced is intentional — do not simplify it. Rewrite any repeated or near-identical sentences.
 
 {level_texts}
 
