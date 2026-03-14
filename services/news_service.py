@@ -1348,6 +1348,64 @@ def generate_learning_content(
     )
 
     # --- Step 1: Simplify + translate (primary LLM, e.g. Mistral) ---
+    if target_language == "Finnish":
+        cefr_guidelines = """\
+- A1: Max 7 words per sentence. Present tense only. Simple \
+subject-verb-object structure. No subordinate clauses. \
+Allowed grammar: basic verb conjugation (present tense), \
+partitive after numbers and in negatives, minulla on \
+(possession), missä/mistä/mihin location forms, -ko/kö \
+questions. No passive, no past tense, no conditionals.
+
+- A2: Max 10 words per sentence. Present and simple past \
+tense (imperfect). One subordinate clause allowed using \
+ja, mutta, koska, että, jos, kun. \
+Allowed grammar: imperfect tense, basic passive in \
+suggestions (mennään), conditional for polite requests \
+(haluaisin), partitive object, common case endings \
+(elative -sta, allative -lle, inessive -ssa). \
+No complex infinitive constructions.
+
+- B1: Max 15 words per sentence. Present, past, perfect \
+tense. Compound sentences allowed. Passive voice permitted. \
+Allowed grammar: perfect tense (on mennyt), passive in \
+full sentences, third/fourth infinitive constructions, wider \
+conjunction range (vaikka, siksi, kuitenkin, ennen kuin)."""
+    elif target_language == "German":
+        cefr_guidelines = """\
+- A1: Max 7 words per sentence. Present tense (Präsens) only. \
+Simple subject-verb-object structure. No subordinate clauses. \
+Allowed grammar: basic verb conjugation, sein/haben, definite \
+and indefinite articles (der/die/das), nominative and accusative \
+cases only. No past tense, no modals, no separable verbs.
+
+- A2: Max 10 words per sentence. Present tense and simple past \
+(Perfekt with haben/sein). One subordinate clause allowed using \
+und, aber, weil, dass, wenn, oder. \
+Allowed grammar: modal verbs (kann, muss, will), separable verbs \
+(z.B. anrufen), dative case, basic adjective endings. \
+No Konjunktiv, no Passiv, no Genitiv.
+
+- B1: Max 15 words per sentence. Present, Perfekt, and Präteritum \
+tense. Compound sentences and subordinate clauses allowed. \
+Passive voice (Passiv with werden) permitted. \
+Allowed grammar: Konjunktiv II for reported speech and politeness \
+(z.B. könnte, würde), relative clauses, two-way prepositions, \
+wider connector range (obwohl, deshalb, trotzdem, bevor)."""
+    else:
+        cefr_guidelines = """\
+- A1: Max 7 words per sentence. Present tense only. Simple \
+subject-verb-object structure. No subordinate clauses. \
+No passive, no past tense, no conditionals.
+
+- A2: Max 10 words per sentence. Present and simple past tense. \
+One subordinate clause allowed (e.g. because, that, if, when). \
+No complex verb constructions.
+
+- B1: Max 15 words per sentence. Present, past, and perfect \
+tense. Compound sentences allowed. Passive voice permitted. \
+Wider range of conjunctions and connectors."""
+
     step1_prompt = f"""You are a language-learning assistant.
 
 Task:
@@ -1355,17 +1413,18 @@ Task:
 2) Translate each sentence into natural English.
 
 CEFR Level Guidelines for {target_level}:
-- A1: Max 7 words per sentence. Present tense and simple past only. No subordinate clauses. Basic subject-verb-object structure.
-- A2: Max 10 words per sentence. One subordinate clause allowed (e.g. "että", "because"). Common past and future tenses permitted.
-- B1: Max 15 words per sentence. Compound sentences allowed. Passive voice permitted. Wider range of tenses.
+
+{cefr_guidelines}
 
 Rules:
 - Sentence 1 MUST be a one-sentence summary lede: the single most important fact of the story, written as a punchy newspaper opener.
 - Keep facts accurate to the source. Do not invent new facts.
-{char_instruction}- Use grammatical complexity appropriate to {target_level} (see guidelines above).
+{char_instruction}- Vary sentence structure throughout — avoid repeating the same subject-verb pattern more than twice consecutively.
+- Always write exactly 10 sentences unless the source content genuinely cannot support 10 distinct facts.
+- Use grammatical complexity appropriate to {target_level} (see guidelines above).
 - Topic-specific vocabulary (names, places, events) may exceed typical {target_level} frequency — this is expected and acceptable.
 - Avoid grammar structures beyond the {target_level} guidelines.
-- Sentences should gradually increase in complexity: sentences 1–3 simplest, 10–12 slightly more complex but still within level.
+- Sentences should gradually increase in complexity: sentences 1–3 simplest, 8-10 slightly more complex but still within level.
 
 Return ONLY valid JSON where simple_text and english_translation are arrays of strings (one string per sentence):
 {{
@@ -1545,26 +1604,85 @@ def generate_learning_content_all_levels(
     step1_level_shape = '{"simple_text": ["sentence 1", "sentence 2", "..."], "english_translation": ["sentence 1", "sentence 2", "..."]}'
     step1_json_shape = ",\n  ".join(f'"{lvl}": {step1_level_shape}' for lvl in levels)
 
+    if target_language == "Finnish":
+        cefr_guidelines = """\
+- A1: Max 7 words per sentence. Present tense only. Simple \
+subject-verb-object structure. No subordinate clauses. \
+Allowed grammar: basic verb conjugation (present tense), \
+partitive after numbers and in negatives, minulla on \
+(possession), missä/mistä/mihin location forms, -ko/kö \
+questions. No passive, no past tense, no conditionals.
+
+- A2: Max 10 words per sentence. Present and simple past \
+tense (imperfect). One subordinate clause allowed using \
+ja, mutta, koska, että, jos, kun. \
+Allowed grammar: imperfect tense, basic passive in \
+suggestions (mennään), conditional for polite requests \
+(haluaisin), partitive object, common case endings \
+(elative -sta, allative -lle, inessive -ssa). \
+No complex infinitive constructions.
+
+- B1: Max 15 words per sentence. Present, past, perfect \
+tense. Compound sentences allowed. Passive voice permitted. \
+Allowed grammar: perfect tense (on mennyt), passive in \
+full sentences, third/fourth infinitive constructions, wider \
+conjunction range (vaikka, siksi, kuitenkin, ennen kuin)."""
+    elif target_language == "German":
+        cefr_guidelines = """\
+- A1: Max 7 words per sentence. Present tense (Präsens) only. \
+Simple subject-verb-object structure. No subordinate clauses. \
+Allowed grammar: basic verb conjugation, sein/haben, definite \
+and indefinite articles (der/die/das), nominative and accusative \
+cases only. No past tense, no modals, no separable verbs.
+
+- A2: Max 10 words per sentence. Present tense and simple past \
+(Perfekt with haben/sein). One subordinate clause allowed using \
+und, aber, weil, dass, wenn, oder. \
+Allowed grammar: modal verbs (kann, muss, will), separable verbs \
+(z.B. anrufen), dative case, basic adjective endings. \
+No Konjunktiv, no Passiv, no Genitiv.
+
+- B1: Max 15 words per sentence. Present, Perfekt, and Präteritum \
+tense. Compound sentences and subordinate clauses allowed. \
+Passive voice (Passiv with werden) permitted. \
+Allowed grammar: Konjunktiv II for reported speech and politeness \
+(z.B. könnte, würde), relative clauses, two-way prepositions, \
+wider connector range (obwohl, deshalb, trotzdem, bevor)."""
+    else:
+        cefr_guidelines = """\
+- A1: Max 7 words per sentence. Present tense only. Simple \
+subject-verb-object structure. No subordinate clauses. \
+No passive, no past tense, no conditionals.
+
+- A2: Max 10 words per sentence. Present and simple past tense. \
+One subordinate clause allowed (e.g. because, that, if, when). \
+No complex verb constructions.
+
+- B1: Max 15 words per sentence. Present, past, and perfect \
+tense. Compound sentences allowed. Passive voice permitted. \
+Wider range of conjunctions and connectors."""
+
     step1_prompt = f"""You are a language-learning assistant.
 
 Task:
 Generate simplified {target_language} versions of this news article at {len(levels)} CEFR levels: {levels_str}.
 
 For EACH level:
-1) Rewrite in simple {target_language} at that CEFR level, maximum 12 sentences.
+1) Rewrite in simple {target_language} at that CEFR level, exactly 10 sentences (unless the source genuinely cannot support 10 distinct facts).
 2) Translate each sentence into natural English.
 
 CEFR Level Guidelines:
-- A1: Max 7 words per sentence. Present tense and simple past only. No subordinate clauses. Basic subject-verb-object structure.
-- A2: Max 10 words per sentence. One subordinate clause allowed (e.g. "että", "because"). Common past and future tenses permitted.
-- B1: Max 15 words per sentence. Compound sentences allowed. Passive voice permitted. Wider range of tenses.
+
+{cefr_guidelines}
 
 Rules:
 - Sentence 1 MUST be a one-sentence summary lede: the single most important fact of the story, written as a punchy newspaper opener.
 - Keep facts accurate to the source. Do not invent new facts.
-{char_instruction}- Use grammatical complexity appropriate to each CEFR level (see guidelines above).
+{char_instruction}- Vary sentence structure throughout — avoid repeating the same subject-verb pattern more than twice consecutively.
+- Use grammatical complexity appropriate to each CEFR level (see guidelines above).
 - Topic-specific vocabulary (names, places, events) may exceed typical level frequency — this is expected and acceptable.
-- Sentences should gradually increase in complexity: sentences 1–3 simplest, 10–12 slightly more complex but still within level.
+- Avoid grammar structures beyond each level's guidelines.
+- Sentences should gradually increase in complexity: sentences 1–3 simplest, 8-10 slightly more complex but still within level.
 
 Return ONLY valid JSON where simple_text and english_translation are arrays of strings (one string per sentence):
 {{
@@ -1636,7 +1754,7 @@ For EACH level return:
 - confirmed_level: the CEFR level (one of: {levels_str}) that this text actually reads as after your review. Usually matches the intended level; use your judgement if it clearly does not.
 - corrections: ONLY sentences that need changes (omit correct sentences — empty array if all OK)
 - keywords: 6 key vocabulary words from the (corrected) {target_language} sentences. Prioritize verbs, case-inflected nouns, news-context words. Include base_form, translation, used_form, used_form_translation, grammatical_form.
-- grammar_notes: max 2 pedagogical notes for language learners — highlight interesting grammar structures in the text (e.g. a case usage, verb form, sentence pattern). Do NOT describe corrections you made. Empty array if nothing noteworthy. Explanations in English.
+- grammar_notes: max 2 pedagogical notes for language learners — highlight interesting grammar structures in the text (e.g. a case usage, verb form, sentence pattern). Do NOT describe corrections you made. Empty array if nothing noteworthy. Explanations in English. Grammar notes must only explain structures appropriate to that level — do not explain A2/B1 structures in an A1 text.
 
 Return JSON only:
 {{
