@@ -1474,7 +1474,13 @@ English translations (0-indexed):
 Return JSON only. For corrections, include ONLY sentences that need changes — omit correct sentences entirely. If nothing needs fixing, return an empty array.
 Also extract 6 key vocabulary words and add grammar notes (max 2, empty array if none noteworthy).
 
+confirmed_level: assess what CEFR level this text actually reads as AFTER your corrections. \
+Base this on sentence length, grammar structures used, and vocabulary complexity. \
+If the corrected text clearly reads as a different level than {target_level}, report that level instead. \
+Otherwise confirm {target_level}.
+
 {{
+  "confirmed_level": "{target_level}",
   "corrections": [
     {{"index": 0, "corrected_text": "...", "corrected_english": "..."}}
   ],
@@ -1521,11 +1527,16 @@ Also extract 6 key vocabulary words and add grammar notes (max 2, empty array if
             if "corrected_english" in correction:
                 corrected_english[idx] = correction["corrected_english"]
 
+    confirmed_level = to_text(step2_parsed.get("confirmed_level", "")).upper().strip()
+    if confirmed_level not in CEFR_LEVELS:
+        confirmed_level = target_level
+
     parsed = {
         "simple_text": "\n".join(corrected_simple),
         "english_translation": "\n".join(corrected_english),
         "keywords": step2_parsed.get("keywords", []),
         "grammar_notes": step2_parsed.get("grammar_notes", []),
+        "confirmed_level": confirmed_level,
     }
 
     if article_id:
@@ -1752,7 +1763,7 @@ Topic vocabulary being advanced is intentional — do not simplify it.
 {level_texts}
 
 For EACH level return:
-- confirmed_level: the CEFR level (one of: {levels_str}) that this text actually reads as after your review. Usually matches the intended level; use your judgement if it clearly does not.
+- confirmed_level: assess what CEFR level this text actually reads as AFTER your corrections. Base this on sentence length, grammar structures used, and vocabulary complexity. If the corrected text clearly reads as a different level than intended, report that level instead (must be one of: {levels_str}). Otherwise confirm the intended level.
 - corrections: ONLY sentences that need changes (omit correct sentences — empty array if all OK)
 - keywords: 6 key vocabulary words from the (corrected) {target_language} sentences. Prioritize verbs, case-inflected nouns, news-context words. Include base_form, translation, used_form, used_form_translation, grammatical_form.
 - grammar_notes: max 2 pedagogical notes for language learners — highlight interesting grammar structures in the text (e.g. a case usage, verb form, sentence pattern). Do NOT describe corrections you made. Empty array if nothing noteworthy. Explanations in English. Grammar notes must only explain structures appropriate to that level — do not explain A2/B1 structures in an A1 text.
