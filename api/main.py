@@ -800,8 +800,8 @@ async def admin_run_pipeline(
     result = run_auto_pipeline(top_n=top_n, provider=provider, review_provider=review_provider, languages=valid_languages, allowed_levels=valid_levels)
 
     save_auto_pick_run(
-        target_language=None,
-        target_level=None,
+        target_language=", ".join(valid_languages) or "all",
+        target_level=", ".join(valid_levels) or "all",
         per_source=3,
         top_n=top_n,
         auto_result=result,
