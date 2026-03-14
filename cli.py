@@ -151,7 +151,7 @@ def cmd_send_digest(args: argparse.Namespace) -> int:
 
 def cmd_create_user(args: argparse.Namespace) -> int:
     try:
-        user_id = create_user(args.username, args.password)
+        user_id, _ = create_user(args.username, args.password)
         print(f"User '{args.username}' created (id={user_id}).")
         return 0
     except ValueError as e:

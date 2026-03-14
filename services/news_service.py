@@ -5,11 +5,12 @@ import hmac
 import json
 import os
 import re
+import secrets
 import sqlite3
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import feedparser
 import requests
@@ -98,20 +99,21 @@ def _verify_password(password: str, stored_hash: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def create_user(username: str, password: str, email: Optional[str] = None) -> int:
-    """Create a new user. Returns the new user id. Raises ValueError if username or email taken."""
+def create_user(username: str, password: str, email: Optional[str] = None) -> Tuple[int, Optional[str]]:
+    """Create a new user. Returns (user_id, confirm_token). Raises ValueError if username or email taken."""
     with db_connect() as db:
         if db.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone():
             raise ValueError(f"Username '{username}' is already taken.")
         if email and db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone():
             raise ValueError(f"An account with that email already exists.")
         password_hash = _hash_password(password)
+        confirm_token = secrets.token_urlsafe(32) if email else None
         cursor = db.execute(
-            "INSERT INTO users (username, email, password_hash, created_at) VALUES (?, ?, ?, ?)",
-            (username, email or None, password_hash, now_iso()),
+            "INSERT INTO users (username, email, password_hash, confirm_token, created_at) VALUES (?, ?, ?, ?, ?)",
+            (username, email or None, password_hash, confirm_token, now_iso()),
         )
         db.commit()
-        return cursor.lastrowid
+        return cursor.lastrowid, confirm_token
 
 
 def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
@@ -132,6 +134,76 @@ def verify_user_password(username: str, password: str) -> Optional[Dict[str, Any
     if user and _verify_password(password, user["password_hash"]):
         return user
     return None
+
+
+def create_email_confirm_token(user_id: int) -> str:
+    """Generate and store an email confirmation token for the user."""
+    token = secrets.token_urlsafe(32)
+    with db_connect() as db:
+        db.execute("UPDATE users SET confirm_token = ? WHERE id = ?", (token, user_id))
+        db.commit()
+    return token
+
+def confirm_user_email(token: str) -> bool:
+    """Mark user email as confirmed. Returns True on success."""
+    with db_connect() as db:
+        row = db.execute("SELECT id FROM users WHERE confirm_token = ? AND email_confirmed = 0", (token,)).fetchone()
+        if not row:
+            return False
+        db.execute("UPDATE users SET email_confirmed = 1, confirm_token = NULL WHERE id = ?", (row["id"],))
+        db.commit()
+        return True
+
+def create_password_reset_token(email: str) -> Optional[str]:
+    """Generate a password reset token for the given email. Returns token or None if email not found."""
+    with db_connect() as db:
+        row = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+        if not row:
+            return None
+        token = secrets.token_urlsafe(32)
+        expires = (datetime.utcnow() + timedelta(hours=1)).isoformat()
+        db.execute(
+            "UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE id = ?",
+            (token, expires, row["id"]),
+        )
+        db.commit()
+        return token
+
+def get_user_by_reset_token(token: str) -> Optional[Dict[str, Any]]:
+    """Return user if token is valid and not expired."""
+    with db_connect() as db:
+        row = db.execute(
+            "SELECT * FROM users WHERE reset_token = ?", (token,)
+        ).fetchone()
+        if not row:
+            return None
+        row = dict(row)
+        expires = row.get("reset_token_expires")
+        if not expires or datetime.utcnow().isoformat() > expires:
+            return None
+        return row
+
+def reset_user_password(token: str, new_password: str) -> bool:
+    """Reset password using a valid token. Returns True on success."""
+    user = get_user_by_reset_token(token)
+    if not user:
+        return False
+    password_hash = _hash_password(new_password)
+    with db_connect() as db:
+        db.execute(
+            "UPDATE users SET password_hash = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?",
+            (password_hash, user["id"]),
+        )
+        db.commit()
+    return True
+
+def get_all_users() -> List[Dict[str, Any]]:
+    """Return all users ordered by created_at desc."""
+    with db_connect() as db:
+        rows = db.execute(
+            "SELECT id, username, email, email_confirmed, language, level, created_at FROM users ORDER BY created_at DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 def get_user_settings(user_id: int) -> Dict[str, Any]:
@@ -811,7 +883,11 @@ def init_db() -> None:
                 password_hash TEXT NOT NULL,
                 language     TEXT NOT NULL DEFAULT 'Finnish',
                 level        TEXT NOT NULL DEFAULT 'A2',
-                created_at   TEXT NOT NULL
+                created_at   TEXT NOT NULL,
+                email_confirmed INTEGER NOT NULL DEFAULT 0,
+                confirm_token TEXT UNIQUE,
+                reset_token TEXT UNIQUE,
+                reset_token_expires TEXT
             );
 
             CREATE TABLE IF NOT EXISTS user_article_reads (
@@ -880,6 +956,10 @@ def init_db() -> None:
         ensure_column(db, "processed_articles", "processing_time REAL DEFAULT 0")
         ensure_column(db, "pipeline_events", "run_id TEXT")
         ensure_column(db, "users", "email TEXT")
+        ensure_column(db, "users", "email_confirmed INTEGER NOT NULL DEFAULT 0")
+        ensure_column(db, "users", "confirm_token TEXT")
+        ensure_column(db, "users", "reset_token TEXT")
+        ensure_column(db, "users", "reset_token_expires TEXT")
         db.execute("CREATE INDEX IF NOT EXISTS idx_articles_source_name ON articles(source_name)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_articles_published_created ON articles(published, created_at)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_articles_is_read ON articles(is_read)")

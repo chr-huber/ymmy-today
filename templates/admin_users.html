@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Users — ymmy Admin{% endblock %}
+
+{% block content %}
+<div class="flex items-center gap-3 mb-5">
+  <h1 class="font-serif text-lg font-semibold">Users</h1>
+  <span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">{{ users|length }}</span>
+  <a href="/admin" class="text-xs text-stone-400 hover:text-stone-600 underline ml-auto">← Admin</a>
+</div>
+
+<div class="bg-white rounded-xl border border-stone-200 overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-stone-50 border-b border-stone-200">
+      <tr>
+        <th class="text-left px-4 py-2.5 text-xs font-semibold text-stone-400 uppercase tracking-wide">Username</th>
+        <th class="text-left px-4 py-2.5 text-xs font-semibold text-stone-400 uppercase tracking-wide">Email</th>
+        <th class="text-left px-4 py-2.5 text-xs font-semibold text-stone-400 uppercase tracking-wide">Confirmed</th>
+        <th class="text-left px-4 py-2.5 text-xs font-semibold text-stone-400 uppercase tracking-wide">Language</th>
+        <th class="text-left px-4 py-2.5 text-xs font-semibold text-stone-400 uppercase tracking-wide">Level</th>
+        <th class="text-left px-4 py-2.5 text-xs font-semibold text-stone-400 uppercase tracking-wide">Joined</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-stone-100">
+      {% for u in users %}
+      <tr class="hover:bg-stone-50">
+        <td class="px-4 py-2.5 font-medium">{{ u.username }}</td>
+        <td class="px-4 py-2.5 text-stone-500">{{ u.email or '—' }}</td>
+        <td class="px-4 py-2.5">
+          {% if u.email_confirmed %}
+          <span class="text-green-600 text-xs font-medium">✓ yes</span>
+          {% elif u.email %}
+          <span class="text-amber-500 text-xs font-medium">pending</span>
+          {% else %}
+          <span class="text-stone-300 text-xs">—</span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-2.5 text-stone-500">{{ u.language }}</td>
+        <td class="px-4 py-2.5 text-stone-500">{{ u.level }}</td>
+        <td class="px-4 py-2.5 text-stone-400 text-xs">{{ u.created_at[:10] if u.created_at else '—' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="px-4 py-6 text-center text-stone-400 text-sm">No users yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

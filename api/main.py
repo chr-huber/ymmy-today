@@ -44,7 +44,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from starlette.middleware.sessions import SessionMiddleware
 
-from services.email_service import smtp_configured, send_welcome_email
+from services.email_service import smtp_configured, send_welcome_email, send_confirmation_email, send_password_reset_email
 from services.newsletter_service import (
     add_subscriber,
     confirm_subscriber,
@@ -69,7 +69,13 @@ from services.news_service import (
     TRUSTED_SOURCES,
     clear_database,
     clear_language_data,
+    confirm_user_email,
+    create_email_confirm_token,
+    create_password_reset_token,
     create_user,
+    get_all_users,
+    get_user_by_reset_token,
+    reset_user_password,
     db_connect,
     get_article,
     get_due_count,
@@ -312,6 +318,10 @@ async def login_submit(
             context,
             status_code=401,
         )
+    if smtp_configured() and user.get("email") and not user.get("email_confirmed"):
+        context = await get_template_context(request)
+        context["error"] = "Please confirm your email address before signing in. Check your inbox."
+        return templates.TemplateResponse("login.html", context, status_code=403)
     request.session["user_id"] = user["id"]
     # Seed language/level from browser cookies on first login if DB still has defaults
     settings = get_user_settings(user["id"])
@@ -369,18 +379,19 @@ async def register_submit(
         return templates.TemplateResponse("register.html", context, status_code=400)
 
     try:
-        user_id = create_user(username, password, email=email)
+        user_id, confirm_token = create_user(username, password, email=email)
     except ValueError as e:
         context["error"] = str(e)
         return templates.TemplateResponse("register.html", context, status_code=400)
 
     request.session["user_id"] = user_id
 
-    if smtp_configured():
+    if smtp_configured() and confirm_token:
         try:
-            send_welcome_email(email, username)
+            base_url = str(request.base_url).rstrip("/")
+            send_confirmation_email(email, username, confirm_token, base_url)
         except Exception:
-            logging.warning("Welcome email failed for %s", email, exc_info=True)
+            logging.warning("Confirmation email failed for %s", email, exc_info=True)
 
     return RedirectResponse(url="/welcome", status_code=303)
 
@@ -393,6 +404,93 @@ async def welcome_page(request: Request):
     context = await get_template_context(request)
     context["user"] = user
     return templates.TemplateResponse("welcome.html", context)
+
+
+# ── Email confirmation ────────────────────────────────────────────────────────
+
+@app.get("/confirm-email/{token}", response_class=HTMLResponse)
+async def confirm_email(request: Request, token: str):
+    ok = confirm_user_email(token)
+    context = await get_template_context(request)
+    context["confirmed"] = ok
+    return templates.TemplateResponse("confirm_email.html", context)
+
+
+# ── Password reset ────────────────────────────────────────────────────────────
+
+@app.get("/forgot-password", response_class=HTMLResponse)
+async def forgot_password_page(request: Request):
+    context = await get_template_context(request)
+    return templates.TemplateResponse("forgot_password.html", context)
+
+
+@app.post("/forgot-password")
+@limiter.limit("5/minute")
+async def forgot_password_submit(request: Request, email: str = Form(...)):
+    if not await verify_csrf_token(request):
+        context = await get_template_context(request)
+        context["error"] = "Invalid CSRF token"
+        return templates.TemplateResponse("forgot_password.html", context, status_code=403)
+
+    # Always show success to avoid email enumeration
+    context = await get_template_context(request)
+    context["sent"] = True
+
+    token = create_password_reset_token(email)
+    if token and smtp_configured():
+        user = get_user_by_reset_token(token)
+        try:
+            base_url = str(request.base_url).rstrip("/")
+            send_password_reset_email(email, user["username"], token, base_url)
+        except Exception:
+            logging.warning("Password reset email failed for %s", email, exc_info=True)
+
+    return templates.TemplateResponse("forgot_password.html", context)
+
+
+@app.get("/reset-password/{token}", response_class=HTMLResponse)
+async def reset_password_page(request: Request, token: str):
+    user = get_user_by_reset_token(token)
+    context = await get_template_context(request)
+    if not user:
+        context["invalid"] = True
+        return templates.TemplateResponse("reset_password.html", context)
+    context["token"] = token
+    return templates.TemplateResponse("reset_password.html", context)
+
+
+@app.post("/reset-password/{token}")
+@limiter.limit("5/minute")
+async def reset_password_submit(
+    request: Request,
+    token: str,
+    password: str = Form(...),
+    password_confirm: str = Form(...),
+):
+    if not await verify_csrf_token(request):
+        context = await get_template_context(request)
+        context["error"] = "Invalid CSRF token"
+        context["token"] = token
+        return templates.TemplateResponse("reset_password.html", context, status_code=403)
+
+    context = await get_template_context(request)
+
+    if password != password_confirm:
+        context["error"] = "Passwords do not match"
+        context["token"] = token
+        return templates.TemplateResponse("reset_password.html", context, status_code=400)
+    if len(password) < 8:
+        context["error"] = "Password must be at least 8 characters"
+        context["token"] = token
+        return templates.TemplateResponse("reset_password.html", context, status_code=400)
+
+    ok = reset_user_password(token, password)
+    if not ok:
+        context["invalid"] = True
+        return templates.TemplateResponse("reset_password.html", context, status_code=400)
+
+    context["success"] = True
+    return templates.TemplateResponse("reset_password.html", context)
 
 
 # ── Reader pages ──────────────────────────────────────────────────────────────
@@ -1053,6 +1151,17 @@ async def admin_send_digest(
     if dry_run:
         msg = f"[DRY RUN] {msg}"
     return RedirectResponse(url=f"/admin?msg={msg}", status_code=303)
+
+
+@app.get("/admin/users", response_class=HTMLResponse)
+async def admin_users_view(
+    request: Request,
+    _: HTTPBasicCredentials = Depends(require_admin),
+):
+    users = get_all_users()
+    context = await get_template_context(request)
+    context["users"] = users
+    return templates.TemplateResponse("admin_users.html", context)
 
 
 @app.get("/admin/newsletter", response_class=HTMLResponse)

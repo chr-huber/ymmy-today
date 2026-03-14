@@ -87,3 +87,37 @@ def send_welcome_email(to: str, username: str) -> None:
 """
     text = f"Welcome to ymmy, {username}!\n\nYou're all set — start reading at https://ymmy.app"
     send_email(to, "Welcome to ymmy!", html, text)
+
+
+def send_confirmation_email(to: str, username: str, token: str, base_url: str = "https://ymmy.app") -> None:
+    """Send email confirmation link."""
+    link = f"{base_url}/confirm-email/{token}"
+    html = f"""
+<html><body style="font-family:Georgia,serif;color:#292524;max-width:480px;margin:0 auto;padding:32px 16px">
+  <h2 style="font-size:1.4rem;margin-bottom:8px">Confirm your email</h2>
+  <p style="color:#57534e">Hi {username}, please confirm your email address to activate your ymmy account.</p>
+  <p style="margin-top:24px">
+    <a href="{link}" style="background:#fbbf24;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:0.9rem">Confirm email →</a>
+  </p>
+  <p style="margin-top:24px;font-size:0.8rem;color:#a8a29e">This link expires in 7 days. If you didn't sign up for ymmy, you can ignore this email.</p>
+</body></html>
+"""
+    text = f"Confirm your ymmy email: {link}"
+    send_email(to, "Confirm your ymmy email", html, text)
+
+
+def send_password_reset_email(to: str, username: str, token: str, base_url: str = "https://ymmy.app") -> None:
+    """Send password reset link."""
+    link = f"{base_url}/reset-password/{token}"
+    html = f"""
+<html><body style="font-family:Georgia,serif;color:#292524;max-width:480px;margin:0 auto;padding:32px 16px">
+  <h2 style="font-size:1.4rem;margin-bottom:8px">Reset your password</h2>
+  <p style="color:#57534e">Hi {username}, click below to reset your ymmy password. This link expires in 1 hour.</p>
+  <p style="margin-top:24px">
+    <a href="{link}" style="background:#fbbf24;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:0.9rem">Reset password →</a>
+  </p>
+  <p style="margin-top:24px;font-size:0.8rem;color:#a8a29e">If you didn't request this, you can ignore this email. Your password won't change.</p>
+</body></html>
+"""
+    text = f"Reset your ymmy password: {link}"
+    send_email(to, "Reset your ymmy password", html, text)
