@@ -3117,6 +3117,26 @@ def cleanup_old_unprocessed_articles(days: int = 3) -> int:
         return result.rowcount
 
 
+def register_manual_process(article_id: int, language: str, level: str) -> None:
+    """Create a solo auto_pick_run + item so a manually processed article appears in the feed."""
+    with db_connect() as db:
+        article = db.execute(
+            "SELECT source_name, title, url FROM articles WHERE id = ?", (article_id,)
+        ).fetchone()
+        if not article:
+            return
+        cursor = db.execute(
+            "INSERT INTO auto_pick_runs (target_language, target_level, per_source, top_n, created_at) VALUES (?, ?, 1, 1, ?)",
+            (language, level, now_iso()),
+        )
+        run_id = cursor.lastrowid
+        db.execute(
+            "INSERT INTO auto_pick_items (run_id, article_id, source_name, title, url, score, processed_ok, error) VALUES (?, ?, ?, ?, ?, 1.0, 1, NULL)",
+            (run_id, article_id, article["source_name"], article["title"], article["url"]),
+        )
+        db.commit()
+
+
 def save_auto_pick_run(
     *,
     target_language: str,

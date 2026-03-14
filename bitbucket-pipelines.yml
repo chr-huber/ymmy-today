@@ -2,13 +2,21 @@ pipelines:
   custom:
     run-pipeline:
       - step:
-          name: Run pipeline
+          name: Run pipeline (3x A1)
           image: curlimages/curl
           script:
             - curl -sf --max-time 600 -X POST
               -u "admin:$ADMIN_PASSWORD"
               https://ymmy.fly.dev/admin/run
-              -d "top_n=4&levels=A1&levels=A2&languages=Finnish"
+              -d "top_n=3&levels=A1&languages=Finnish"
+      - step:
+          name: Run pipeline (1x A2)
+          image: curlimages/curl
+          script:
+            - curl -sf --max-time 600 -X POST
+              -u "admin:$ADMIN_PASSWORD"
+              https://ymmy.fly.dev/admin/run
+              -d "top_n=1&levels=A2&languages=Finnish"
 
     send-digest:
       - step:

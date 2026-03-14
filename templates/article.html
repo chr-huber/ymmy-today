@@ -182,7 +182,7 @@
 
 <!-- Grammar notes -->
 {% if grammar %}
-<div x-data="{ open: false }">
+<div x-data="{ open: true }">
   <button @click="open = !open"
           class="flex items-center gap-2 text-sm text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 mb-3 transition-colors">
     <svg class="w-4 h-4 transition-transform" :class="open ? 'rotate-90' : ''"
@@ -192,7 +192,7 @@
     <span class="font-medium">Grammar notes</span>
     <span class="text-stone-400 dark:text-stone-500">({{ grammar|length }})</span>
   </button>
-  <div x-show="open" x-cloak class="space-y-3 mb-6">
+  <div x-show="open" class="space-y-3 mb-6">
     {% for item in grammar %}
     <div class="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 p-4">
       <p class="text-sm font-medium text-finnish-700 mb-1">

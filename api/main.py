@@ -91,6 +91,7 @@ from services.news_service import (
     mark_word_reviewed_for_user,
     parse_iso_timestamp,
     process_article,
+    register_manual_process,
     run_auto_pipeline,
     cleanup_old_unprocessed_articles,
     save_auto_pick_run,
@@ -370,21 +371,19 @@ async def index(
     # Check if there are articles/runs beyond the current page
     if older:
         with db_connect() as _db:
-            run_count = _db.execute("SELECT COUNT(*) FROM auto_pick_runs").fetchone()[0]
-        if run_count > 0:
-            with db_connect() as _db:
-                next_run = _db.execute(
-                    "SELECT id FROM auto_pick_runs ORDER BY id DESC LIMIT 1 OFFSET ?",
-                    (run_offset + 4,),
-                ).fetchone()
-            has_next = next_run is not None
+            next_runs = _db.execute(
+                "SELECT id FROM auto_pick_runs ORDER BY id DESC LIMIT 4 OFFSET ?",
+                (run_offset + 4,),
+            ).fetchall()
+        if next_runs:
+            has_next = True
         else:
-            # No runs — check if there are more processed articles beyond this page
-            next_offset = run_offset * 4 + 16
+            # Mirror list_articles fallback: paginate processed_articles directly
+            next_sql_offset = (run_offset + 4) * 4
             with db_connect() as _db:
                 has_next = _db.execute(
                     "SELECT 1 FROM processed_articles ORDER BY created_at DESC LIMIT 1 OFFSET ?",
-                    (next_offset,),
+                    (next_sql_offset,),
                 ).fetchone() is not None
     else:
         has_next = False
@@ -865,6 +864,7 @@ async def admin_process_article(
     result = process_article(article_id, force=False, target_language=language, target_level=level)
     if "error" in result:
         return RedirectResponse(url=f"/admin?error={result['error']}", status_code=303)
+    register_manual_process(article_id, language, level)
     return RedirectResponse(url="/admin?msg=Article processed", status_code=303)
 
 
