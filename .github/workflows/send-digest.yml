@@ -1,6 +1,8 @@
 name: Send Newsletter Digest
 
 on:
+  schedule:
+    - cron: "0 5 * * 0"  # Sundays at 05:00 UTC
   workflow_dispatch:
 
 jobs:
