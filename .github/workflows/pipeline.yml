@@ -1,0 +1,37 @@
+name: Run Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      top_n_a1:
+        description: "Number of A1 articles to process"
+        required: false
+        default: "3"
+      top_n_a2:
+        description: "Number of A2 articles to process"
+        required: false
+        default: "1"
+
+jobs:
+  run-a1:
+    name: Run pipeline (A1)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger A1 pipeline
+        run: |
+          curl -sf --max-time 600 -X POST \
+            -u "admin:${{ secrets.ADMIN_PASSWORD }}" \
+            https://ymmy.fly.dev/admin/run \
+            -d "top_n=${{ inputs.top_n_a1 }}&levels=A1&languages=Finnish"
+
+  run-a2:
+    name: Run pipeline (A2)
+    needs: run-a1
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger A2 pipeline
+        run: |
+          curl -sf --max-time 600 -X POST \
+            -u "admin:${{ secrets.ADMIN_PASSWORD }}" \
+            https://ymmy.fly.dev/admin/run \
+            -d "top_n=${{ inputs.top_n_a2 }}&levels=A2&languages=Finnish"

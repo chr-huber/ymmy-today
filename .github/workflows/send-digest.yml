@@ -1,0 +1,15 @@
+name: Send Newsletter Digest
+
+on:
+  workflow_dispatch:
+
+jobs:
+  send-digest:
+    name: Send weekly newsletter digest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger digest send
+        run: |
+          curl -sf --max-time 120 -X POST \
+            -u "admin:${{ secrets.ADMIN_PASSWORD }}" \
+            https://ymmy.fly.dev/admin/send-digest
