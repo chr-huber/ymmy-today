@@ -3,78 +3,81 @@
 
 {% block content %}
 
-<div class="flex items-center gap-3 mb-5">
+{% set qs %}{% if current_source %}&source={{ current_source }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_lang_filter %}&lang_filter={{ current_lang_filter }}{% endif %}{% if current_level_filter %}&level_filter={{ current_level_filter }}{% endif %}{% endset %}
+
+<!-- Header -->
+<div class="flex items-center gap-3 mb-5 flex-wrap">
   <h1 class="font-serif text-lg font-semibold">Admin</h1>
-  <span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">Private</span>
-  <a href="/admin/newsletter" class="text-xs text-stone-400 hover:text-stone-600 underline ml-2">Newsletter →</a>
-  <a href="/admin/users" class="text-xs text-stone-400 hover:text-stone-600 underline ml-2">Users →</a>
-  <span class="text-xs text-stone-400 ml-auto">
-    {{ processed_count }} processed · {{ total }} in DB
-    {% if not has_api_key %} · <span class="text-amber-500">no API key — demo mode</span>{% endif %}
+  <span class="text-xs bg-stone-100 dark:bg-stone-800 text-stone-500 px-2 py-0.5 rounded-full">Private</span>
+  <a href="/admin/newsletter" class="text-xs text-stone-400 hover:text-stone-600 dark:hover:text-stone-300 underline">Newsletter →</a>
+  <a href="/admin/users"      class="text-xs text-stone-400 hover:text-stone-600 dark:hover:text-stone-300 underline">Users →</a>
+  <span class="text-xs text-stone-400 dark:text-stone-500 ml-auto">
+    {{ processed_count }} processed · {{ total }} total
+    {% if not has_api_key %} · <span class="text-amber-500">no API key</span>{% endif %}
   </span>
 </div>
 
 {% if msg %}
-<div class="mb-4 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700">{{ msg }}</div>
+<div class="mb-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl px-4 py-3 text-sm text-green-700 dark:text-green-400">{{ msg }}</div>
 {% endif %}
 {% if error %}
-<div class="mb-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">{{ error }}</div>
+<div class="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3 text-sm text-red-700 dark:text-red-400">{{ error }}</div>
 {% endif %}
 
 <!-- Run Pipeline -->
-<div class="bg-white rounded-xl border border-stone-200 p-5 mb-4">
-  <div class="flex items-center justify-between mb-3">
+<div class="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 p-5 mb-4">
+  <div class="flex items-center justify-between mb-4">
     <h2 class="font-serif font-semibold">Run Pipeline</h2>
-    <span class="text-xs text-stone-400">Step 1: <span class="font-medium">{{ llm_provider|capitalize }}</span> · Step 2: <span class="font-medium">{{ review_llm_provider|capitalize }}</span></span>
+    <span class="text-xs text-stone-400 dark:text-stone-500">Step 1: <span class="font-medium">{{ llm_provider|capitalize }}</span> · Step 2: <span class="font-medium">{{ review_llm_provider|capitalize }}</span></span>
   </div>
   <form method="post" action="/admin/run" x-data="{ loading: false }" @submit="loading = true">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <div class="flex items-end gap-3 mb-4 flex-wrap">
       <div>
-        <label class="block text-xs font-semibold text-stone-400 uppercase tracking-wide mb-1">Articles to pick</label>
+        <label class="block text-xs font-semibold text-stone-400 dark:text-stone-500 uppercase tracking-wide mb-1">Articles</label>
         <input type="number" name="top_n" min="1" max="100" value="{{ default_top_n }}"
-               class="w-20 border border-stone-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400">
+               class="w-20 border border-stone-200 dark:border-stone-700 rounded-lg px-2 py-1.5 text-sm bg-white dark:bg-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-finnish-400">
       </div>
       <div>
-        <label class="block text-xs font-semibold text-stone-400 uppercase tracking-wide mb-1">Step 1 — Simplify</label>
-        <select name="provider" class="border border-stone-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400">
-          <option value="mistral" {% if llm_provider == "mistral" %}selected{% endif %}>Mistral</option>
+        <label class="block text-xs font-semibold text-stone-400 dark:text-stone-500 uppercase tracking-wide mb-1">Step 1 — Simplify</label>
+        <select name="provider" class="border border-stone-200 dark:border-stone-700 rounded-lg px-2 py-1.5 text-sm bg-white dark:bg-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-finnish-400">
+          <option value="mistral"  {% if llm_provider == "mistral"  %}selected{% endif %}>Mistral</option>
           <option value="deepseek" {% if llm_provider == "deepseek" %}selected{% endif %}>DeepSeek</option>
-          <option value="claude" {% if llm_provider == "claude" %}selected{% endif %}>Claude</option>
-          <option value="openai" {% if llm_provider == "openai" %}selected{% endif %}>OpenAI</option>
+          <option value="claude"   {% if llm_provider == "claude"   %}selected{% endif %}>Claude</option>
+          <option value="openai"   {% if llm_provider == "openai"   %}selected{% endif %}>OpenAI</option>
         </select>
       </div>
       <div>
-        <label class="block text-xs font-semibold text-stone-400 uppercase tracking-wide mb-1">Step 2 — Review</label>
-        <select name="review_provider" class="border border-stone-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400">
-          <option value="claude" {% if review_llm_provider == "claude" %}selected{% endif %}>Claude</option>
-          <option value="mistral" {% if review_llm_provider == "mistral" %}selected{% endif %}>Mistral</option>
+        <label class="block text-xs font-semibold text-stone-400 dark:text-stone-500 uppercase tracking-wide mb-1">Step 2 — Review</label>
+        <select name="review_provider" class="border border-stone-200 dark:border-stone-700 rounded-lg px-2 py-1.5 text-sm bg-white dark:bg-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-finnish-400">
+          <option value="claude"   {% if review_llm_provider == "claude"   %}selected{% endif %}>Claude</option>
+          <option value="mistral"  {% if review_llm_provider == "mistral"  %}selected{% endif %}>Mistral</option>
           <option value="deepseek" {% if review_llm_provider == "deepseek" %}selected{% endif %}>DeepSeek</option>
-          <option value="openai" {% if review_llm_provider == "openai" %}selected{% endif %}>OpenAI</option>
+          <option value="openai"   {% if review_llm_provider == "openai"   %}selected{% endif %}>OpenAI</option>
         </select>
       </div>
     </div>
     <div class="flex gap-8 mb-4">
       <div>
-        <label class="block text-xs font-semibold text-stone-400 uppercase tracking-wide mb-2">Languages</label>
+        <label class="block text-xs font-semibold text-stone-400 dark:text-stone-500 uppercase tracking-wide mb-2">Languages</label>
         <div class="flex gap-4">
           {% for lang in learning_languages %}
           <label class="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" name="languages" value="{{ lang }}" checked
-                   class="w-4 h-4 rounded border-stone-300 text-amber-500 focus:ring-amber-400 focus:ring-2">
-            <span class="text-sm text-stone-700">{{ lang }}</span>
+                   class="w-4 h-4 rounded border-stone-300 text-finnish-600 focus:ring-finnish-400 focus:ring-2">
+            <span class="text-sm text-stone-700 dark:text-stone-300">{{ lang }}</span>
           </label>
           {% endfor %}
         </div>
       </div>
       <div>
-        <label class="block text-xs font-semibold text-stone-400 uppercase tracking-wide mb-2">Levels</label>
+        <label class="block text-xs font-semibold text-stone-400 dark:text-stone-500 uppercase tracking-wide mb-2">Levels</label>
         <div class="flex gap-4">
           {% for lvl in cefr_levels %}
           <label class="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" name="levels" value="{{ lvl }}" checked
-                   class="w-4 h-4 rounded border-stone-300 text-amber-500 focus:ring-amber-400 focus:ring-2">
-            <span class="text-sm text-stone-700">{{ lvl }}</span>
+                   class="w-4 h-4 rounded border-stone-300 text-finnish-600 focus:ring-finnish-400 focus:ring-2">
+            <span class="text-sm text-stone-700 dark:text-stone-300">{{ lvl }}</span>
           </label>
           {% endfor %}
         </div>
@@ -82,14 +85,14 @@
     </div>
     <div class="flex gap-2">
       <button type="submit" :disabled="loading"
-              class="flex-1 bg-amber-400 hover:bg-amber-500 disabled:bg-amber-200 text-white rounded-xl py-2.5 font-medium text-sm transition-colors">
+              class="flex-1 bg-finnish-600 hover:bg-finnish-700 disabled:opacity-50 text-white rounded-xl py-2.5 font-medium text-sm transition-colors">
         <span x-show="!loading">▶ Run Pipeline</span>
         <span x-show="loading" x-cloak>⏳ Running…</span>
       </button>
       <form method="post" action="/admin/ingest" x-data="{ loading: false }" @submit="loading = true">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button type="submit" :disabled="loading"
-                class="bg-stone-100 hover:bg-stone-200 disabled:opacity-50 text-stone-700 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap">
+                class="bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 disabled:opacity-50 text-stone-700 dark:text-stone-300 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap">
           <span x-show="!loading">Fetch headlines only</span>
           <span x-show="loading" x-cloak>Fetching…</span>
         </button>
@@ -98,17 +101,39 @@
   </form>
 </div>
 
+<!-- Processing Log -->
+{% if processing_log %}
+<div class="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 overflow-hidden mb-4">
+  <div class="px-5 py-3.5 border-b border-stone-100 dark:border-stone-800 flex items-center justify-between">
+    <h2 class="font-serif font-semibold">Recent Processing</h2>
+    <a href="/admin/debug-logs" class="text-xs text-stone-400 hover:text-stone-600 dark:hover:text-stone-300 underline">All logs →</a>
+  </div>
+  <div class="divide-y divide-stone-50 dark:divide-stone-800">
+    {% for entry in processing_log %}
+    <div class="px-4 py-2 flex items-center gap-3 hover:bg-stone-50 dark:hover:bg-stone-800/50 transition-colors">
+      <span class="text-xs w-14 flex-shrink-0 font-medium {% if entry.status == 'success' %}text-green-600{% elif entry.status == 'error' %}text-red-500{% else %}text-amber-500{% endif %}">{{ entry.status }}</span>
+      <span class="text-xs text-stone-400 dark:text-stone-500 w-12 flex-shrink-0">{{ entry.target_language }}</span>
+      <span class="text-xs text-stone-400 dark:text-stone-500 w-6 flex-shrink-0">{{ entry.target_level }}</span>
+      <p class="text-sm text-stone-700 dark:text-stone-300 truncate flex-1">{{ entry.article_title }}</p>
+      {% if entry.error_message %}<span class="text-xs text-red-400 truncate max-w-xs">{{ entry.error_message }}</span>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 <!-- Article list -->
-<div class="bg-white rounded-xl border border-stone-200 mb-4 overflow-hidden" x-data="{ manualLanguage: '{{ settings.language }}', manualLevel: '{{ settings.level }}' }">
-  <div class="px-5 py-3.5 border-b border-stone-100">
-    <div class="flex items-center justify-between mb-3 gap-3">
+<div class="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 mb-4 overflow-hidden"
+     x-data="{ manualLanguage: '{{ settings.language }}', manualLevel: '{{ settings.level }}' }">
+  <div class="px-5 py-3.5 border-b border-stone-100 dark:border-stone-800">
+    <div class="flex items-center justify-between mb-3">
       <h2 class="font-serif font-semibold">Articles</h2>
-      <span class="text-xs text-stone-400">{{ total_filtered }} matching · {{ total }} total</span>
+      <span class="text-xs text-stone-400 dark:text-stone-500">{{ total_filtered }} matching · {{ total }} total</span>
     </div>
     <form method="get" action="/admin" class="flex gap-2 flex-wrap items-end">
       <div>
-        <label class="block text-xs text-stone-400 font-semibold uppercase tracking-wide mb-1">Source</label>
-        <select name="source" class="border border-stone-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400">
+        <label class="block text-xs text-stone-400 dark:text-stone-500 font-semibold uppercase tracking-wide mb-1">Source</label>
+        <select name="source" class="border border-stone-200 dark:border-stone-700 rounded-lg px-2 py-1.5 text-sm bg-white dark:bg-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-finnish-400">
           <option value="">All sources</option>
           {% for src in source_names %}
           <option value="{{ src }}" {% if src == current_source %}selected{% endif %}>{{ src }}</option>
@@ -116,18 +141,18 @@
         </select>
       </div>
       <div>
-        <label class="block text-xs text-stone-400 font-semibold uppercase tracking-wide mb-1">Status</label>
-        <select name="status" class="border border-stone-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400">
+        <label class="block text-xs text-stone-400 dark:text-stone-500 font-semibold uppercase tracking-wide mb-1">Status</label>
+        <select name="status" class="border border-stone-200 dark:border-stone-700 rounded-lg px-2 py-1.5 text-sm bg-white dark:bg-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-finnish-400">
           <option value="">All</option>
-          <option value="processed" {% if current_status == "processed" %}selected{% endif %}>Processed</option>
+          <option value="processed"   {% if current_status == "processed"   %}selected{% endif %}>Processed</option>
           <option value="unprocessed" {% if current_status == "unprocessed" %}selected{% endif %}>Unprocessed</option>
-          <option value="read" {% if current_status == "read" %}selected{% endif %}>Read</option>
-          <option value="unread" {% if current_status == "unread" %}selected{% endif %}>Unread</option>
+          <option value="read"        {% if current_status == "read"        %}selected{% endif %}>Read</option>
+          <option value="unread"      {% if current_status == "unread"      %}selected{% endif %}>Unread</option>
         </select>
       </div>
       <div>
-        <label class="block text-xs text-stone-400 font-semibold uppercase tracking-wide mb-1">Language</label>
-        <select name="lang_filter" class="border border-stone-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400">
+        <label class="block text-xs text-stone-400 dark:text-stone-500 font-semibold uppercase tracking-wide mb-1">Language</label>
+        <select name="lang_filter" class="border border-stone-200 dark:border-stone-700 rounded-lg px-2 py-1.5 text-sm bg-white dark:bg-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-finnish-400">
           <option value="">All</option>
           {% for lang in learning_languages %}
           <option value="{{ lang }}" {% if current_lang_filter == lang %}selected{% endif %}>{{ lang }}</option>
@@ -135,27 +160,27 @@
         </select>
       </div>
       <div>
-        <label class="block text-xs text-stone-400 font-semibold uppercase tracking-wide mb-1">Level</label>
-        <select name="level_filter" class="border border-stone-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400">
+        <label class="block text-xs text-stone-400 dark:text-stone-500 font-semibold uppercase tracking-wide mb-1">Level</label>
+        <select name="level_filter" class="border border-stone-200 dark:border-stone-700 rounded-lg px-2 py-1.5 text-sm bg-white dark:bg-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-finnish-400">
           <option value="">All</option>
           {% for lvl in cefr_levels %}
           <option value="{{ lvl }}" {% if current_level_filter == lvl %}selected{% endif %}>{{ lvl }}</option>
           {% endfor %}
         </select>
       </div>
-      <button type="submit" class="bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors">Filter</button>
+      <button type="submit" class="bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors">Filter</button>
       {% if current_source or current_status or current_lang_filter or current_level_filter %}
-      <a href="/admin" class="text-stone-500 hover:text-stone-700 text-sm underline">Clear</a>
+      <a href="/admin" class="text-stone-400 hover:text-stone-600 dark:hover:text-stone-300 text-sm underline">Clear</a>
       {% endif %}
     </form>
     <div class="mt-3 flex items-center gap-2 flex-wrap">
-      <span class="text-xs text-stone-400">Process single article as:</span>
-      <select x-model="manualLanguage" class="text-xs border border-stone-200 rounded-md px-1.5 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400">
+      <span class="text-xs text-stone-400 dark:text-stone-500">Process as:</span>
+      <select x-model="manualLanguage" class="text-xs border border-stone-200 dark:border-stone-700 rounded-md px-1.5 py-1 bg-white dark:bg-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-finnish-400">
         {% for lang in learning_languages %}
         <option value="{{ lang }}">{{ lang }}</option>
         {% endfor %}
       </select>
-      <select x-model="manualLevel" class="text-xs border border-stone-200 rounded-md px-1.5 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400">
+      <select x-model="manualLevel" class="text-xs border border-stone-200 dark:border-stone-700 rounded-md px-1.5 py-1 bg-white dark:bg-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-finnish-400">
         {% for lvl in cefr_levels %}
         <option value="{{ lvl }}">{{ lvl }}</option>
         {% endfor %}
@@ -164,36 +189,36 @@
   </div>
 
   {% if not paginated_articles %}
-  <p class="text-sm text-stone-400 text-center py-8">No articles match the filters.</p>
+  <p class="text-sm text-stone-400 dark:text-stone-500 text-center py-8">No articles match the filters.</p>
   {% else %}
-  <div class="divide-y divide-stone-50">
+  <div class="divide-y divide-stone-50 dark:divide-stone-800">
     {% for article in paginated_articles %}
-    <div class="px-4 py-3 flex items-center gap-3 hover:bg-stone-50 transition-colors">
+    <div class="px-4 py-3 flex items-center gap-3 hover:bg-stone-50 dark:hover:bg-stone-800/50 transition-colors">
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-1.5 mb-0.5 flex-wrap">
-          <span class="text-xs text-stone-400">{{ article.source_name }}</span>
-          <span class="text-xs text-stone-300">·</span>
-          <span class="text-xs text-stone-400">{{ article.age }}</span>
+          <span class="text-xs text-stone-400 dark:text-stone-500">{{ article.source_name }}</span>
+          <span class="text-xs text-stone-300 dark:text-stone-600">·</span>
+          <span class="text-xs text-stone-400 dark:text-stone-500">{{ article.age }}</span>
           {% if article.is_processed %}
-          <span class="text-xs bg-green-50 text-green-600 px-1.5 py-0.5 rounded font-medium">✓ {{ article.processed_combos }}</span>
+          <span class="text-xs bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 px-1.5 py-0.5 rounded font-medium">✓ {{ article.processed_combos }}</span>
           {% else %}
-          <span class="text-xs bg-stone-100 text-stone-400 px-1.5 py-0.5 rounded">new</span>
+          <span class="text-xs bg-stone-100 dark:bg-stone-800 text-stone-400 px-1.5 py-0.5 rounded">new</span>
           {% endif %}
-          {% if article.is_read %}<span class="text-xs text-stone-300">read</span>{% endif %}
+          {% if article.is_read %}<span class="text-xs text-stone-300 dark:text-stone-600">read</span>{% endif %}
         </div>
-        <p class="text-sm text-stone-700 truncate">{{ article.title }}</p>
+        <p class="text-sm text-stone-700 dark:text-stone-300 truncate">{{ article.title }}</p>
       </div>
-      <div class="flex items-center gap-2 flex-shrink-0">
+      <div class="flex-shrink-0">
         {% if article.is_processed %}
         <a href="/article/{{ article.id }}?language={{ article.latest_target_language or settings.language }}&level={{ article.latest_target_level or settings.level }}"
-           class="text-xs px-2.5 py-1 rounded-lg border border-stone-200 hover:border-amber-300 hover:text-amber-700 transition-colors">Read →</a>
+           class="text-xs px-2.5 py-1 rounded-lg border border-stone-200 dark:border-stone-700 hover:border-finnish-300 hover:text-finnish-700 dark:hover:text-finnish-400 transition-colors">Read →</a>
         {% else %}
         <form method="post" action="/admin/process/{{ article.id }}" x-data="{ loading: false }" @submit="loading = true" class="flex items-center gap-1.5">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <input type="hidden" name="language" :value="manualLanguage">
           <input type="hidden" name="level" :value="manualLevel">
           <button type="submit" :disabled="loading"
-                  class="text-xs px-2.5 py-1 rounded-lg border border-stone-200 hover:border-amber-300 hover:text-amber-700 disabled:opacity-40 transition-colors">
+                  class="text-xs px-2.5 py-1 rounded-lg border border-stone-200 dark:border-stone-700 hover:border-finnish-300 hover:text-finnish-700 dark:hover:text-finnish-400 disabled:opacity-40 transition-colors">
             <span x-show="!loading">Process</span>
             <span x-show="loading" x-cloak>…</span>
           </button>
@@ -205,41 +230,57 @@
   </div>
 
   {% if total_pages > 1 %}
-  <div class="px-4 py-3 border-t border-stone-100 flex items-center justify-center gap-2">
+  <div class="px-4 py-3 border-t border-stone-100 dark:border-stone-800 flex items-center justify-center gap-2">
     {% if page > 1 %}
-    <a href="/admin?page=1{% if current_source %}&source={{ current_source }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_lang_filter %}&lang_filter={{ current_lang_filter }}{% endif %}{% if current_level_filter %}&level_filter={{ current_level_filter }}{% endif %}"
-       class="text-xs px-2 py-1 rounded border border-stone-200 hover:bg-stone-50">First</a>
-    <a href="/admin?page={{ page - 1 }}{% if current_source %}&source={{ current_source }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_lang_filter %}&lang_filter={{ current_lang_filter }}{% endif %}{% if current_level_filter %}&level_filter={{ current_level_filter }}{% endif %}"
-       class="text-xs px-2 py-1 rounded border border-stone-200 hover:bg-stone-50">← Prev</a>
+    <a href="/admin?page=1{{ qs }}"           class="text-xs px-2 py-1 rounded border border-stone-200 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800">First</a>
+    <a href="/admin?page={{ page - 1 }}{{ qs }}" class="text-xs px-2 py-1 rounded border border-stone-200 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800">← Prev</a>
     {% endif %}
-    <span class="text-xs text-stone-400">Page <strong>{{ page }}</strong> of <strong>{{ total_pages }}</strong></span>
+    <span class="text-xs text-stone-400 dark:text-stone-500">{{ page }} / {{ total_pages }}</span>
     {% if page < total_pages %}
-    <a href="/admin?page={{ page + 1 }}{% if current_source %}&source={{ current_source }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_lang_filter %}&lang_filter={{ current_lang_filter }}{% endif %}{% if current_level_filter %}&level_filter={{ current_level_filter }}{% endif %}"
-       class="text-xs px-2 py-1 rounded border border-stone-200 hover:bg-stone-50">Next →</a>
-    <a href="/admin?page={{ total_pages }}{% if current_source %}&source={{ current_source }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_lang_filter %}&lang_filter={{ current_lang_filter }}{% endif %}{% if current_level_filter %}&level_filter={{ current_level_filter }}{% endif %}"
-       class="text-xs px-2 py-1 rounded border border-stone-200 hover:bg-stone-50">Last</a>
+    <a href="/admin?page={{ page + 1 }}{{ qs }}"       class="text-xs px-2 py-1 rounded border border-stone-200 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800">Next →</a>
+    <a href="/admin?page={{ total_pages }}{{ qs }}"    class="text-xs px-2 py-1 rounded border border-stone-200 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800">Last</a>
     {% endif %}
   </div>
   {% endif %}
   {% endif %}
 </div>
 
-<!-- Maintenance (collapsed by default) -->
-<div class="space-y-3 mb-4" x-data="{ openMaint: false }">
-  <button type="button" @click="openMaint = !openMaint"
-          class="text-xs text-stone-500 hover:text-stone-700 underline underline-offset-2">
-    <span x-show="!openMaint">Show maintenance actions</span>
-    <span x-show="openMaint" x-cloak>Hide maintenance actions</span>
+<!-- Maintenance (collapsed) -->
+<div class="mb-4" x-data="{ open: false }">
+  <button type="button" @click="open = !open"
+          class="text-xs text-stone-400 hover:text-stone-600 dark:hover:text-stone-300 underline underline-offset-2 mb-3">
+    <span x-show="!open">Show maintenance</span>
+    <span x-show="open" x-cloak>Hide maintenance</span>
   </button>
-  <div x-show="openMaint" x-cloak class="space-y-3">
+  <div x-show="open" x-cloak class="space-y-3">
+
+    <!-- Stats -->
+    <div class="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 p-4">
+      <h2 class="font-serif font-semibold mb-3">Lifetime Stats</h2>
+      <div class="grid grid-cols-3 gap-3 text-center">
+        <div>
+          <p class="text-xl font-semibold font-serif">{{ stats.total_processed }}</p>
+          <p class="text-xs text-stone-400 dark:text-stone-500 mt-0.5">Processed</p>
+        </div>
+        <div>
+          <p class="text-xl font-semibold font-serif">{{ "{:,}".format(stats.total_tokens) }}</p>
+          <p class="text-xs text-stone-400 dark:text-stone-500 mt-0.5">Tokens</p>
+        </div>
+        <div>
+          <p class="text-xl font-semibold font-serif">${{ stats.estimated_cost_usd }}</p>
+          <p class="text-xs text-stone-400 dark:text-stone-500 mt-0.5">Est. cost</p>
+        </div>
+      </div>
+    </div>
 
     <!-- Archive old -->
-    <div class="bg-white rounded-xl border border-stone-200 p-4">
+    <div class="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 p-4">
       <h2 class="font-serif font-semibold mb-1">Archive Old Articles</h2>
-      <p class="text-xs text-stone-400 mb-3">Move processed articles older than N days out of the main feed. They stay readable at <a href="/archive" class="underline">Archive</a>.</p>
+      <p class="text-xs text-stone-400 dark:text-stone-500 mb-3">Move processed articles older than N days to the <a href="/archive" class="underline">Archive</a>.</p>
       <form method="post" action="/admin/archive-old" class="flex items-center gap-3 flex-wrap">
-        <label class="text-sm text-stone-600">Older than</label>
-        <select name="older_than_days" class="border border-stone-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label class="text-sm text-stone-600 dark:text-stone-300">Older than</label>
+        <select name="older_than_days" class="border border-stone-200 dark:border-stone-700 rounded-lg px-2 py-1.5 text-sm bg-white dark:bg-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-finnish-400">
           <option value="3">3 days</option>
           <option value="7" selected>7 days</option>
           <option value="14">14 days</option>
@@ -247,103 +288,63 @@
           <option value="60">60 days</option>
           <option value="9999">Everything</option>
         </select>
-        <button type="submit" class="bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl px-4 py-2 text-sm font-medium transition-colors">Archive</button>
+        <button type="submit" class="bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 rounded-xl px-4 py-2 text-sm font-medium transition-colors">Archive</button>
       </form>
     </div>
 
     <!-- Delete unprocessed -->
-    <div class="bg-white rounded-xl border border-stone-200 p-4">
-      <h2 class="font-serif font-semibold mb-1">Delete Unprocessed Articles</h2>
-      <p class="text-xs text-stone-400 mb-3">Permanently delete articles that were never processed by the pipeline.</p>
+    <div class="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 p-4">
+      <h2 class="font-serif font-semibold mb-1">Delete Unprocessed</h2>
+      <p class="text-xs text-stone-400 dark:text-stone-500 mb-3">Permanently delete articles that were never processed.</p>
       <form method="post" action="/admin/delete-unprocessed" class="flex items-center gap-3 flex-wrap">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <label class="text-sm text-stone-600">Older than</label>
-        <select name="older_than_days" class="border border-stone-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400">
+        <label class="text-sm text-stone-600 dark:text-stone-300">Older than</label>
+        <select name="older_than_days" class="border border-stone-200 dark:border-stone-700 rounded-lg px-2 py-1.5 text-sm bg-white dark:bg-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-finnish-400">
           <option value="1">1 day</option>
           <option value="3" selected>3 days</option>
           <option value="7">7 days</option>
           <option value="14">14 days</option>
           <option value="9999">Everything</option>
         </select>
-        <button type="submit" class="bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl px-4 py-2 text-sm font-medium transition-colors">Delete</button>
+        <button type="submit" class="bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 rounded-xl px-4 py-2 text-sm font-medium transition-colors">Delete</button>
       </form>
     </div>
 
-    <!-- Stats -->
-    <div class="bg-white rounded-xl border border-stone-200 p-4">
-      <h2 class="font-serif font-semibold mb-3">Lifetime Stats</h2>
-      <div class="grid grid-cols-3 gap-3">
-        <div class="text-center">
-          <p class="text-xl font-semibold font-serif">{{ stats.total_processed }}</p>
-          <p class="text-xs text-stone-400 mt-0.5">Processed outputs</p>
-        </div>
-        <div class="text-center">
-          <p class="text-xl font-semibold font-serif">{{ "{:,}".format(stats.total_tokens) }}</p>
-          <p class="text-xs text-stone-400 mt-0.5">Tokens used</p>
-        </div>
-        <div class="text-center">
-          <p class="text-xl font-semibold font-serif">${{ stats.estimated_cost_usd }}</p>
-          <p class="text-xs text-stone-400 mt-0.5">Estimated cost</p>
-        </div>
-      </div>
-    </div>
-
     <!-- Sources -->
-    <div class="bg-white rounded-xl border border-stone-200 p-4">
+    <div class="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 p-4">
       <h2 class="font-serif font-semibold mb-3">Sources</h2>
       <div class="space-y-1">
         {% for source in trusted_sources %}
         <div class="flex items-center gap-2 text-sm">
-          <span class="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0"></span>
-          <span class="text-stone-700">{{ source.name }}</span>
-          <span class="text-stone-400 text-xs truncate">{{ source.rss }}</span>
+          <span class="w-2 h-2 rounded-full bg-finnish-400 flex-shrink-0"></span>
+          <span class="text-stone-700 dark:text-stone-300">{{ source.name }}</span>
+          <span class="text-stone-400 dark:text-stone-500 text-xs truncate">{{ source.rss }}</span>
         </div>
         {% endfor %}
       </div>
     </div>
-
-    <!-- Processing Log -->
-    {% if processing_log %}
-    <div class="bg-white rounded-xl border border-stone-200 overflow-hidden">
-      <div class="px-5 py-3.5 border-b border-stone-100 flex items-center justify-between">
-        <h2 class="font-serif font-semibold">Recent Processing</h2>
-        <a href="/admin/debug-logs" class="text-xs text-stone-400 hover:text-stone-600 underline">View all logs →</a>
-      </div>
-      <div class="divide-y divide-stone-50">
-        {% for entry in processing_log %}
-        <div class="px-4 py-2.5 flex items-center gap-3 hover:bg-stone-50 transition-colors">
-          <span class="text-xs w-14 flex-shrink-0 {% if entry.status == 'success' %}text-green-600{% elif entry.status == 'error' %}text-red-500{% else %}text-amber-500{% endif %}">{{ entry.status }}</span>
-          <span class="text-xs text-stone-400 w-12 flex-shrink-0">{{ entry.target_language }}</span>
-          <span class="text-xs text-stone-400 w-8 flex-shrink-0">{{ entry.target_level }}</span>
-          <p class="text-sm text-stone-700 truncate flex-1">{{ entry.article_title }}</p>
-          {% if entry.error_message %}<span class="text-xs text-red-400 truncate max-w-xs">{{ entry.error_message }}</span>{% endif %}
-        </div>
-        {% endfor %}
-      </div>
-    </div>
-    {% endif %}
 
   </div>
 </div>
 
 <!-- Danger Zone -->
-<div class="bg-white rounded-xl border border-red-100 p-5" x-data="{ confirm: false }">
+<div class="bg-white dark:bg-stone-900 rounded-xl border border-red-100 dark:border-red-900/40 p-5" x-data="{ confirm: false }">
   <h2 class="font-serif font-semibold text-red-600 mb-1">Danger Zone</h2>
-  <p class="text-xs text-stone-400 mb-3">Delete data globally or for a single language.</p>
-  <div class="mb-4 p-3 rounded-xl border border-amber-100 bg-amber-50">
-    <p class="text-xs text-stone-500 mb-2">Clear generated data for one language (keeps raw ingested articles).</p>
+  <p class="text-xs text-stone-400 dark:text-stone-500 mb-3">Delete data globally or for a single language.</p>
+  <div class="mb-4 p-3 rounded-xl border border-amber-100 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/10">
+    <p class="text-xs text-stone-500 dark:text-stone-400 mb-2">Clear generated data for one language (keeps raw articles).</p>
     <form method="post" action="/admin/clear-language" class="flex items-center gap-2 flex-wrap">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <select name="language" class="border border-stone-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400">
+      <select name="language" class="border border-stone-200 dark:border-stone-700 rounded-lg px-2 py-1.5 text-sm bg-white dark:bg-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-finnish-400">
         {% for lang in learning_languages %}
         <option value="{{ lang }}">{{ lang }}</option>
         {% endfor %}
       </select>
-      <button type="submit" class="text-sm border border-amber-300 text-amber-700 hover:bg-amber-100 rounded-xl px-3 py-1.5 transition-colors">Clear language data</button>
+      <button type="submit" class="text-sm border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/20 rounded-xl px-3 py-1.5 transition-colors">Clear language data</button>
     </form>
   </div>
   <div x-show="!confirm">
-    <button @click="confirm = true" class="text-sm text-red-500 border border-red-200 hover:bg-red-50 rounded-xl px-4 py-2 transition-colors">Clear Database</button>
+    <button @click="confirm = true" class="text-sm text-red-500 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl px-4 py-2 transition-colors">Clear Database</button>
   </div>
   <div x-show="confirm" x-cloak class="space-y-3">
     <p class="text-sm font-medium text-red-600">Are you sure? This cannot be undone.</p>
@@ -352,7 +353,7 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button type="submit" class="text-sm bg-red-500 text-white rounded-xl px-4 py-2 hover:bg-red-600 transition-colors">Yes, clear everything</button>
       </form>
-      <button @click="confirm = false" class="text-sm border border-stone-200 rounded-xl px-4 py-2 hover:bg-stone-50 transition-colors">Cancel</button>
+      <button @click="confirm = false" class="text-sm border border-stone-200 dark:border-stone-700 rounded-xl px-4 py-2 hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors">Cancel</button>
     </div>
   </div>
 </div>

@@ -874,7 +874,7 @@ async def admin_view(
 ):
     settings = _get_settings(request)
     page = max(1, page)
-    per_page = 50
+    per_page = 20
     admin_data = get_admin_articles_page(
         page=page,
         per_page=per_page,
