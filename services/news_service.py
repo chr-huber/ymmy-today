@@ -342,6 +342,9 @@ def is_excluded_headline(title: str) -> bool:
     for term in _EXCLUDED_HEADLINE_TERMS:
         if re.search(rf"\b{re.escape(term)}\b", lowered):
             return True
+    # Exclude DW-style overview roundups: "Germany news:", "India news:", etc.
+    if re.search(r"\b\w[\w\s]+ news:", lowered):
+        return True
     return False
 
 
