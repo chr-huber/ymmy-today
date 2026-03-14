@@ -45,6 +45,9 @@ from services.email_service import smtp_configured
 from services.newsletter_service import (
     add_subscriber,
     confirm_subscriber,
+    delete_subscriber as newsletter_delete_subscriber,
+    get_all_subscribers,
+    get_digest_log,
     send_weekly_digest,
     subscriber_count,
     unsubscribe as newsletter_unsubscribe,
@@ -981,6 +984,52 @@ async def admin_send_digest(
     if dry_run:
         msg = f"[DRY RUN] {msg}"
     return RedirectResponse(url=f"/admin?msg={msg}", status_code=303)
+
+
+@app.get("/admin/newsletter", response_class=HTMLResponse)
+async def admin_newsletter_view(
+    request: Request,
+    msg: str = "",
+    _: HTTPBasicCredentials = Depends(require_admin),
+):
+    from services.email_service import smtp_configured
+    context = await get_template_context(request)
+    context.update({
+        "settings": _get_settings(request),
+        "current_user": get_optional_user(request),
+        "learning_languages": LEARNING_LANGUAGES,
+        "cefr_levels": CEFR_LEVELS,
+        "due_count": 0,
+        "subscribers": get_all_subscribers(),
+        "digest_log": get_digest_log(),
+        "smtp_ok": smtp_configured(),
+        "msg": msg,
+    })
+    return templates.TemplateResponse("admin_newsletter.html", context)
+
+
+@app.post("/admin/newsletter/send")
+async def admin_newsletter_send(
+    request: Request,
+    language: Optional[str] = Form(default=None),
+    dry_run: bool = Form(default=False),
+    force: bool = Form(default=False),
+    _: HTTPBasicCredentials = Depends(require_admin),
+):
+    result = send_weekly_digest(language=language or None, dry_run=dry_run, force=force)
+    prefix = "[DRY RUN] " if dry_run else ""
+    msg = f"{prefix}Sent {result['sent']}, skipped {result['skipped']}, failed {result['failed']} (total {result['total']})"
+    return RedirectResponse(url=f"/admin/newsletter?msg={msg}", status_code=303)
+
+
+@app.post("/admin/newsletter/delete/{subscriber_id}")
+async def admin_newsletter_delete(
+    request: Request,
+    subscriber_id: int,
+    _: HTTPBasicCredentials = Depends(require_admin),
+):
+    newsletter_delete_subscriber(subscriber_id)
+    return RedirectResponse(url="/admin/newsletter", status_code=303)
 
 
 # ── API endpoints (JSON, for Alpine.js) ───────────────────────────────────────

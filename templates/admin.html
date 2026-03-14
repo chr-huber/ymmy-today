@@ -6,6 +6,7 @@
 <div class="flex items-center gap-3 mb-5">
   <h1 class="font-serif text-lg font-semibold">Admin</h1>
   <span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">Private</span>
+  <a href="/admin/newsletter" class="text-xs text-stone-400 hover:text-stone-600 underline ml-2">Newsletter →</a>
   <span class="text-xs text-stone-400 ml-auto">
     {{ processed_count }} processed · {{ total }} in DB
     {% if not has_api_key %} · <span class="text-amber-500">no API key — demo mode</span>{% endif %}
@@ -30,11 +31,8 @@
     <div class="flex items-end gap-3 mb-4 flex-wrap">
       <div>
         <label class="block text-xs font-semibold text-stone-400 uppercase tracking-wide mb-1">Articles to pick</label>
-        <select name="top_n" class="border border-stone-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400">
-          {% for n in [5, 10, 15, 20, 30, 50, 100] %}
-          <option value="{{ n }}" {% if n == default_top_n %}selected{% endif %}>{{ n }}</option>
-          {% endfor %}
-        </select>
+        <input type="number" name="top_n" min="1" max="100" value="{{ default_top_n }}"
+               class="w-20 border border-stone-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400">
       </div>
       <div>
         <label class="block text-xs font-semibold text-stone-400 uppercase tracking-wide mb-1">Step 1 — Simplify</label>

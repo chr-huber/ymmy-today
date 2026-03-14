@@ -835,6 +835,17 @@ def init_db() -> None:
                 unsubscribe_token TEXT NOT NULL UNIQUE,
                 created_at       TEXT NOT NULL DEFAULT (datetime('now'))
             );
+
+            CREATE TABLE IF NOT EXISTS digest_log (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                sent_at    TEXT NOT NULL DEFAULT (datetime('now')),
+                language   TEXT,
+                dry_run    INTEGER NOT NULL DEFAULT 0,
+                sent       INTEGER NOT NULL DEFAULT 0,
+                skipped    INTEGER NOT NULL DEFAULT 0,
+                failed     INTEGER NOT NULL DEFAULT 0,
+                total      INTEGER NOT NULL DEFAULT 0
+            );
             """
         )
         _migrate_processed_articles_composite_key(db)

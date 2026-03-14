@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from services.email_service import send_email, smtp_configured
-from services.news_service import db_connect, split_sentences
+from services.news_service import _call_llm_api, db_connect, split_sentences
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +101,21 @@ def get_confirmed_subscribers() -> list:
     return [dict(r) for r in rows]
 
 
+def get_all_subscribers() -> list:
+    with db_connect() as db:
+        rows = db.execute(
+            "SELECT id, email, language, level, confirmed, created_at FROM newsletter_subscribers ORDER BY created_at DESC"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def delete_subscriber(subscriber_id: int) -> bool:
+    with db_connect() as db:
+        cur = db.execute("DELETE FROM newsletter_subscribers WHERE id = ?", (subscriber_id,))
+        db.commit()
+    return cur.rowcount > 0
+
+
 def subscriber_count() -> int:
     with db_connect() as db:
         return db.execute(
@@ -108,22 +123,83 @@ def subscriber_count() -> int:
         ).fetchone()[0]
 
 
+def log_digest_send(result: dict, language: Optional[str], dry_run: bool) -> None:
+    with db_connect() as db:
+        db.execute(
+            """INSERT INTO digest_log (language, dry_run, sent, skipped, failed, total)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (language, int(dry_run), result["sent"], result["skipped"], result["failed"], result["total"]),
+        )
+        db.commit()
+
+
+def get_digest_log(limit: int = 20) -> list:
+    with db_connect() as db:
+        rows = db.execute(
+            "SELECT * FROM digest_log ORDER BY sent_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
 # ── Digest building ───────────────────────────────────────────────────────────
 
-def get_digest_articles(language: str, level: Optional[str], days: int = 7) -> list:
-    """Return processed articles from the past `days` days for the given language/level."""
+def _pick_article_ids(candidates: list, limit: int) -> list[int]:
+    """Ask Mistral to pick the most interesting article IDs from candidates. Falls back to first N."""
+    if len(candidates) <= limit:
+        return [c["id"] for c in candidates]
+
+    lines = "\n".join(f'{c["id"]}: [{c["topic"]}] {c["title"]}' for c in candidates)
+    prompt = (
+        f"Here are {len(candidates)} news headlines. "
+        f"Pick the {limit} most interesting and varied ones for a weekly language learning digest. "
+        f"Reply with ONLY a comma-separated list of the numeric IDs, e.g.: 12,7,3\n\n{lines}"
+    )
+    result = _call_llm_api("mistral", prompt, "You are a newsletter editor. Reply only with a comma-separated list of IDs.")
+    if "error" in result:
+        logger.warning("Mistral article picker failed: %s — falling back to recency", result["error"])
+        return [c["id"] for c in candidates[:limit]]
+
+    try:
+        picked = [int(x.strip()) for x in result["content"].strip().split(",")]
+        valid = [i for i in picked if i in {c["id"] for c in candidates}][:limit]
+        if valid:
+            return valid
+    except (ValueError, AttributeError):
+        pass
+
+    logger.warning("Could not parse Mistral picker response — falling back to recency")
+    return [c["id"] for c in candidates[:limit]]
+
+
+def generate_digest_intro(articles: list, language: str) -> str:
+    """Ask Mistral to write a 1-3 sentence intro for the digest based on the chosen articles."""
+    if not articles:
+        return ""
+    titles = "\n".join(f"- {a['title']}" for a in articles)
+    prompt = (
+        f"Write a short 1-3 sentence introduction for a weekly {language} language learning newsletter. "
+        f"This week's articles are:\n{titles}\n\n"
+        f"The intro should feel warm and editorial — briefly mention what's in this week's issue. "
+        f"Write in English. No greeting, no sign-off, just the intro text."
+    )
+    result = _call_llm_api("mistral", prompt, "You are a friendly newsletter editor. Be concise and natural.")
+    if "error" in result:
+        logger.warning("Intro generation failed: %s", result["error"])
+        return ""
+    return result.get("content", "").strip()
+
+
+def get_digest_articles(language: str, level: Optional[str], days: int = 7, limit: int = 3) -> list:
+    """Return up to `limit` articles chosen by Mistral from the past `days` days, with vocab and grammar."""
     since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
     with db_connect() as db:
         level_clause = "AND pa.target_level = ?" if level else ""
-        params: list = [language, since]
-        if level:
-            params.append(level)
         rows = db.execute(
             f"""
             SELECT
                 a.id, a.title, a.url, a.source_name, a.topic,
                 a.assigned_level,
-                pa.simple_text, pa.target_level
+                pa.simple_text, pa.english_translation, pa.target_level
             FROM articles a
             JOIN processed_articles pa ON pa.article_id = a.id
             WHERE pa.target_language = ?
@@ -134,24 +210,49 @@ def get_digest_articles(language: str, level: Optional[str], days: int = 7) -> l
             """,
             [language, since, since] + ([level] if level else []),
         ).fetchall()
-    articles = []
-    seen_ids = set()
-    for row in rows:
-        if row["id"] in seen_ids:
-            continue
-        seen_ids.add(row["id"])
-        sentences = split_sentences(row["simple_text"], max_sentences=2)
-        preview = " ".join(sentences) if sentences else ""
-        articles.append({
-            "id": row["id"],
-            "title": row["title"],
-            "url": row["url"],
-            "source_name": row["source_name"],
-            "topic": row["topic"] or "World",
-            "level": row["assigned_level"] or row["target_level"],
-            "preview": preview,
-            "article_url": f"{APP_BASE_URL}/article/{row['id']}",
-        })
+
+        # Deduplicate by article id
+        seen = set()
+        candidates = []
+        for row in rows:
+            if row["id"] not in seen:
+                seen.add(row["id"])
+                candidates.append(dict(row))
+
+        picked_ids = _pick_article_ids(candidates, limit)
+
+        # Fetch full data for picked articles in order
+        by_id = {c["id"]: c for c in candidates}
+        articles = []
+        for article_id in picked_ids:
+            row = by_id.get(article_id)
+            if not row:
+                continue
+
+            vocab = db.execute(
+                "SELECT base_form, grammatical_form, english_translation, used_form FROM vocabulary_items WHERE article_id = ? LIMIT 5",
+                (article_id,),
+            ).fetchall()
+
+            grammar = db.execute(
+                "SELECT sentence_text, grammar_explanation FROM grammar_items WHERE article_id = ? LIMIT 2",
+                (article_id,),
+            ).fetchall()
+
+            articles.append({
+                "id": row["id"],
+                "title": row["title"],
+                "url": row["url"],
+                "source_name": row["source_name"],
+                "topic": row["topic"] or "World",
+                "level": row["assigned_level"] or row["target_level"],
+                "simple_text": row["simple_text"] or "",
+                "english_translation": row["english_translation"] or "",
+                "vocab": [dict(v) for v in vocab],
+                "grammar": [dict(g) for g in grammar],
+                "article_url": f"{APP_BASE_URL}/article/{row['id']}",
+            })
+
     return articles
 
 
@@ -171,23 +272,35 @@ def send_digest_to_subscriber(subscriber: dict, articles: list, dry_run: bool = 
 
     unsubscribe_url = f"{APP_BASE_URL}/unsubscribe/{subscriber['unsubscribe_token']}"
     level_label = subscriber["level"] or "all levels"
-    subject = f"Your weekly {subscriber['language']} digest"
+    subject = "ymmy · weekly"
+
+    intro = generate_digest_intro(articles, subscriber["language"])
 
     html = tmpl.render(
         language=subscriber["language"],
         level=level_label,
         articles=articles,
+        intro=intro,
         unsubscribe_url=unsubscribe_url,
         base_url=APP_BASE_URL,
         week_label=datetime.now(timezone.utc).strftime("%B %-d, %Y"),
     )
 
     # Plain-text fallback
-    lines = [f"Your weekly {subscriber['language']} news digest\n"]
+    lines = [f"ymmy · weekly\n"]
     for a in articles:
+        lines.append(f"{'─' * 40}")
         lines.append(f"[{a['topic']} · {a['level']}] {a['title']}")
-        lines.append(f"{a['preview']}")
-        lines.append(f"Read: {a['article_url']}\n")
+        if a.get("simple_text"):
+            lines.append(f"\n{a['simple_text']}")
+        if a.get("english_translation"):
+            lines.append(f"\n{a['english_translation']}")
+        if a.get("vocab"):
+            lines.append("\nKey words:")
+            for v in a["vocab"]:
+                lines.append(f"  {v['base_form']} ({v['grammatical_form']}) — {v['english_translation']}")
+        lines.append(f"\nOpen in ymmy: {a['article_url']}\n")
+    lines.append(f"{'─' * 40}")
     lines.append(f"Unsubscribe: {unsubscribe_url}")
     text = "\n".join(lines)
 
@@ -204,12 +317,23 @@ def send_digest_to_subscriber(subscriber: dict, articles: list, dry_run: bool = 
         return False
 
 
-def send_weekly_digest(language: Optional[str] = None, dry_run: bool = False) -> dict:
+def send_weekly_digest(language: Optional[str] = None, dry_run: bool = False, force: bool = False) -> dict:
     """
     Send the weekly digest to all confirmed subscribers.
     If `language` is given, only send to subscribers of that language.
     Returns a summary dict.
     """
+    if not dry_run and not force:
+        cooldown_minutes = 10
+        since = (datetime.now(timezone.utc) - timedelta(minutes=cooldown_minutes)).strftime("%Y-%m-%d %H:%M:%S")
+        with db_connect() as db:
+            recent = db.execute(
+                "SELECT id FROM digest_log WHERE dry_run = 0 AND sent_at >= ? LIMIT 1", (since,)
+            ).fetchone()
+        if recent:
+            logger.warning("Digest already sent in the last %d minutes — skipping", cooldown_minutes)
+            return {"sent": 0, "skipped": 0, "failed": 0, "total": 0, "cooldown": True}
+
     subscribers = get_confirmed_subscribers()
     if language:
         subscribers = [s for s in subscribers if s["language"] == language]
@@ -234,4 +358,6 @@ def send_weekly_digest(language: Optional[str] = None, dry_run: bool = False) ->
             else:
                 failed += 1
 
-    return {"sent": sent, "skipped": skipped, "failed": failed, "total": len(subscribers)}
+    result = {"sent": sent, "skipped": skipped, "failed": failed, "total": len(subscribers)}
+    log_digest_send(result, language, dry_run)
+    return result

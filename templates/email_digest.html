@@ -3,71 +3,134 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Your weekly {{ language }} digest</title>
+  <title>ymmy · weekly</title>
   <style>
     body { margin: 0; padding: 0; background: #f5f4f2; font-family: 'Helvetica Neue', Arial, sans-serif; color: #1c1917; }
-    .wrapper { max-width: 580px; margin: 32px auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e7e5e4; }
-    .header { background: #ffffff; padding: 28px 32px 20px; border-bottom: 1px solid #e7e5e4; }
-    .header-title { font-size: 22px; font-weight: 700; color: #1c1917; margin: 0 0 4px; letter-spacing: -0.3px; }
-    .header-sub { font-size: 13px; color: #78716c; margin: 0; }
-    .content { padding: 24px 32px; }
-    .intro { font-size: 14px; color: #57534e; margin: 0 0 24px; line-height: 1.6; }
-    .article { border-bottom: 1px solid #f0ede9; padding-bottom: 20px; margin-bottom: 20px; }
-    .article:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-    .badges { display: inline-flex; gap: 6px; margin-bottom: 8px; }
+    .wrapper { max-width: 600px; margin: 32px auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e7e5e4; }
+
+    /* Header */
+    .header { padding: 28px 32px 22px; border-bottom: 2px solid #1c1917; }
+    .header-row { display: flex; align-items: baseline; justify-content: space-between; }
+    .header-title { font-size: 24px; font-weight: 700; color: #1c1917; margin: 0; letter-spacing: -0.5px; }
+    .header-meta { font-size: 12px; color: #a8a29e; }
+
+    /* Article block */
+    .article { padding: 28px 32px; border-bottom: 1px solid #e7e5e4; }
+    .article:last-of-type { border-bottom: none; }
+
+    .article-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
     .badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; letter-spacing: 0.3px; }
     .badge-topic { background: #f5f4f2; color: #57534e; }
-    .badge-level { background: #e8f0fe; color: #3b5bdb; }
-    .article-title { font-size: 16px; font-weight: 600; color: #1c1917; margin: 0 0 6px; line-height: 1.4; }
-    .article-title a { color: #1c1917; text-decoration: none; }
-    .article-title a:hover { text-decoration: underline; }
-    .article-preview { font-size: 14px; color: #57534e; margin: 0 0 10px; line-height: 1.6; }
-    .read-link { font-size: 13px; font-weight: 500; color: #3b5bdb; text-decoration: none; }
-    .read-link:hover { text-decoration: underline; }
+    .badge-level { background: #dce9f8; color: #2f5ea5; }
+    .source { font-size: 12px; color: #a8a29e; }
+
+    .article-title { font-size: 18px; font-weight: 700; color: #1c1917; margin: 0 0 16px; line-height: 1.35; letter-spacing: -0.2px; }
+
+    /* Text blocks */
+    .text-label { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #a8a29e; margin: 0 0 6px; }
+    .text-body { font-size: 15px; line-height: 1.7; color: #1c1917; margin: 0 0 20px; }
+    .text-translation { font-size: 14px; line-height: 1.7; color: #57534e; margin: 0 0 20px; font-style: italic; }
+
+    /* Vocab table */
+    .section { margin-bottom: 20px; }
+    .vocab-table { width: 100%; border-collapse: collapse; }
+    .vocab-table td { padding: 5px 0; font-size: 13px; vertical-align: top; }
+    .vocab-word { font-weight: 600; color: #1c1917; padding-right: 12px; white-space: nowrap; }
+    .vocab-form { color: #a8a29e; font-size: 11px; padding-right: 12px; white-space: nowrap; }
+    .vocab-meaning { color: #57534e; }
+
+    /* Grammar */
+    .grammar-item { margin-bottom: 10px; }
+    .grammar-sentence { font-size: 13px; font-weight: 600; color: #1c1917; margin: 0 0 3px; font-style: italic; }
+    .grammar-note { font-size: 13px; color: #57534e; margin: 0; line-height: 1.5; }
+
+    .divider { height: 1px; background: #f0ede9; margin: 16px 0; }
+
+    /* Read link */
+    .read-link { display: inline-block; margin-top: 4px; font-size: 13px; font-weight: 500; color: #2f5ea5; text-decoration: none; }
+
+    /* Footer */
     .footer { background: #f5f4f2; padding: 20px 32px; border-top: 1px solid #e7e5e4; text-align: center; }
-    .footer p { font-size: 12px; color: #a8a29e; margin: 0 0 6px; line-height: 1.5; }
+    .footer p { font-size: 12px; color: #a8a29e; margin: 0 0 4px; line-height: 1.5; }
     .footer a { color: #78716c; text-decoration: underline; }
-    .no-articles { font-size: 14px; color: #78716c; text-align: center; padding: 24px 0; }
+
+    .no-articles { font-size: 14px; color: #78716c; text-align: center; padding: 32px; }
   </style>
 </head>
 <body>
   <div class="wrapper">
 
     <div class="header">
-      <p class="header-title">ymmy</p>
-      <p class="header-sub">Your weekly {{ language }} digest &middot; {{ week_label }}</p>
+      <div class="header-row">
+        <p class="header-title">ymmy &middot; weekly</p>
+        <span class="header-meta">{{ week_label }}{% if level and level != 'all levels' %} &middot; {{ level }}{% endif %}</span>
+      </div>
     </div>
 
-    <div class="content">
-      <p class="intro">
-        Here are this week's simplified news articles in {{ language }}{% if level and level != 'all levels' %} at <strong>{{ level }}</strong>{% endif %}.
-        Read them on ymmy to practice and save new vocabulary.
-      </p>
+    {% if intro %}
+    <div style="padding: 20px 32px 0; font-size: 14px; line-height: 1.7; color: #57534e;">{{ intro }}</div>
+    {% endif %}
 
-      {% if articles %}
-        {% for article in articles %}
-        <div class="article">
-          <div class="badges">
-            <span class="badge badge-topic">{{ article.topic }}</span>
-            <span class="badge badge-level">{{ article.level }}</span>
-          </div>
-          <p class="article-title">
-            <a href="{{ article.article_url }}">{{ article.title }}</a>
-          </p>
-          {% if article.preview %}
-          <p class="article-preview">{{ article.preview }}</p>
-          {% endif %}
-          <a class="read-link" href="{{ article.article_url }}">Read article &rarr;</a>
+    {% if articles %}
+      {% for article in articles %}
+      <div class="article">
+
+        <div class="article-meta">
+          <span class="badge badge-topic">{{ article.topic }}</span>
+          <span class="badge badge-level">{{ article.level }}</span>
+          {% if article.source_name %}<span class="source">{{ article.source_name }}</span>{% endif %}
         </div>
-        {% endfor %}
-      {% else %}
-        <p class="no-articles">No new articles this week. Check back next Sunday!</p>
-      {% endif %}
-    </div>
+
+        <p class="article-title">{{ article.title }}</p>
+
+        {% if article.simple_text %}
+        <p class="text-label">{{ language }}</p>
+        <p class="text-body">{{ article.simple_text }}</p>
+        {% endif %}
+
+        {% if article.english_translation %}
+        <p class="text-label">English</p>
+        <p class="text-translation">{{ article.english_translation }}</p>
+        {% endif %}
+
+        {% if article.vocab %}
+        <div class="section">
+          <p class="text-label">Key words</p>
+          <table class="vocab-table">
+            {% for v in article.vocab %}
+            <tr>
+              <td class="vocab-word">{{ v.base_form }}</td>
+              <td class="vocab-form">{{ v.grammatical_form }}</td>
+              <td class="vocab-meaning">{{ v.english_translation }}</td>
+            </tr>
+            {% endfor %}
+          </table>
+        </div>
+        {% endif %}
+
+        {% if article.grammar %}
+        <div class="section">
+          <p class="text-label">Grammar</p>
+          {% for g in article.grammar %}
+          <div class="grammar-item">
+            <p class="grammar-sentence">&ldquo;{{ g.sentence_text }}&rdquo;</p>
+            <p class="grammar-note">{{ g.grammar_explanation }}</p>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <a class="read-link" href="{{ article.article_url }}">Open in ymmy &rarr;</a>
+
+      </div>
+      {% endfor %}
+    {% else %}
+      <p class="no-articles">No new articles this week. Check back next Sunday!</p>
+    {% endif %}
 
     <div class="footer">
-      <p>You're receiving this because you subscribed to ymmy's weekly digest.</p>
-      <p><a href="{{ unsubscribe_url }}">Unsubscribe</a> &nbsp;&middot;&nbsp; <a href="{{ base_url }}">Visit ymmy</a></p>
+      <p>You subscribed to ymmy's weekly {{ language }} digest.</p>
+      <p><a href="{{ unsubscribe_url }}">Unsubscribe</a> &nbsp;&middot;&nbsp; <a href="{{ base_url }}">ymmy.today</a></p>
     </div>
 
   </div>

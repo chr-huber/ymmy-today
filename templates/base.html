@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" x-data class="h-full">
+<html lang="en" x-data="{ subscribeOpen: {% if request.query_params.get('subscribed') == '1' %}true{% else %}false{% endif %} }" class="h-full">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -44,6 +44,16 @@
           {% endif %}
         </a>
         {% endif %}
+
+        <!-- Subscribe button -->
+        <button @click="subscribeOpen = true"
+                class="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-600 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+                :class="subscribeOpen ? 'bg-stone-100 dark:bg-stone-800 text-stone-600' : ''"
+                aria-label="Subscribe to newsletter">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+          </svg>
+        </button>
 
         <!-- Subtle menu -->
         <div class="relative" x-data="{ open: false }">
@@ -123,7 +133,6 @@
                 <a href="/faq" class="text-sm text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 py-1 transition-colors">FAQ</a>
                 <a href="/impressum" class="text-sm text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 py-1 transition-colors">Legal</a>
               </div>
-              <a href="/admin" class="text-sm text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 py-1 transition-colors">Admin</a>
             </div>
 
           </div>
@@ -134,57 +143,54 @@
     </div>
   </header>
 
-  <main class="max-w-3xl mx-auto px-4 py-6">
-    {% block content %}{% endblock %}
-  </main>
-
-  <!-- Newsletter subscribe -->
-  <div class="max-w-3xl mx-auto px-4 pb-4" x-data="{ open: false }">
-    <div class="border border-stone-200 dark:border-stone-700 rounded-xl p-4 bg-white dark:bg-stone-900">
-
+  <!-- Subscribe modal (outside header so fixed positioning works) -->
+  <div x-show="subscribeOpen" x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center p-4"
+       @keydown.escape.window="subscribeOpen = false">
+    <div class="absolute inset-0 bg-black/40" @click="subscribeOpen = false"></div>
+    <div class="relative w-full max-w-sm bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-xl shadow-xl p-6">
+      <button @click="subscribeOpen = false"
+              class="absolute top-3 right-3 text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
+              aria-label="Close">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
       {% if request.query_params.get('subscribed') == '1' %}
-      <p class="text-sm text-green-700 dark:text-green-400 font-medium text-center py-1">
+      <p class="text-sm text-green-700 dark:text-green-400 font-medium text-center py-2">
         Check your inbox to confirm your subscription!
       </p>
       {% else %}
-      <button @click="open = !open"
-              class="w-full flex items-center justify-between text-sm text-stone-600 dark:text-stone-300 hover:text-stone-800 dark:hover:text-stone-100 transition-colors">
-        <span class="font-medium">Get a weekly digest by email</span>
-        <svg class="w-4 h-4 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-        </svg>
-      </button>
-
-      <div x-show="open" x-cloak class="mt-3">
-        <form method="post" action="/subscribe" class="flex flex-col gap-2">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <input type="email" name="email" required placeholder="your@email.com"
-                 class="border border-stone-200 dark:border-stone-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-finnish-400 w-full" />
-          <div class="flex gap-2">
-            <select name="language"
-                    class="flex-1 border border-stone-200 dark:border-stone-700 rounded-lg px-2 py-2 text-sm bg-white dark:bg-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-finnish-400">
-              {% for lang in learning_languages %}
-              <option value="{{ lang }}" {% if lang == settings.language %}selected{% endif %}>{{ lang }}</option>
-              {% endfor %}
-            </select>
-            <select name="level"
-                    class="flex-1 border border-stone-200 dark:border-stone-700 rounded-lg px-2 py-2 text-sm bg-white dark:bg-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-finnish-400">
-              <option value="">All levels</option>
-              {% for lvl in cefr_levels %}
-              <option value="{{ lvl }}">{{ lvl }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <button type="submit"
-                  class="bg-finnish-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-finnish-700 transition-colors">
-            Subscribe — every Sunday
-          </button>
-        </form>
-      </div>
+      <p class="text-sm font-semibold text-stone-700 dark:text-stone-200 mb-4">Weekly digest by email</p>
+      <form method="post" action="/subscribe" class="flex flex-col gap-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="email" name="email" required placeholder="your@email.com"
+               class="border border-stone-200 dark:border-stone-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-finnish-400 w-full" />
+        <div class="flex gap-2">
+          <select name="language"
+                  class="flex-1 border border-stone-200 dark:border-stone-700 rounded-lg px-2 py-2 text-sm bg-white dark:bg-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-finnish-400">
+            {% for lang in learning_languages %}
+            <option value="{{ lang }}" {% if lang == settings.language %}selected{% endif %}>{{ lang }}</option>
+            {% endfor %}
+          </select>
+          <select name="level"
+                  class="flex-1 border border-stone-200 dark:border-stone-700 rounded-lg px-2 py-2 text-sm bg-white dark:bg-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-finnish-400">
+            <option value="">All levels</option>
+            {% for lvl in cefr_levels %}
+            <option value="{{ lvl }}">{{ lvl }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit"
+                class="bg-finnish-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-finnish-700 transition-colors">
+          Subscribe — every Sunday
+        </button>
+      </form>
       {% endif %}
-
     </div>
   </div>
+
+  <main class="max-w-3xl mx-auto px-4 py-6">
+    {% block content %}{% endblock %}
+  </main>
 
   <div class="max-w-3xl mx-auto px-4 py-4 flex justify-center">
     <a href="https://buymeacoffee.com/ymmy" target="_blank" rel="noopener noreferrer">
