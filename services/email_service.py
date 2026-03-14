@@ -71,3 +71,19 @@ def send_email(to: str, subject: str, html: str, text: str = "") -> None:
 def smtp_configured() -> bool:
     """Return True if SMTP env vars are set."""
     return bool(os.getenv("SMTP_HOST")) and bool(os.getenv("SMTP_FROM"))
+
+
+def send_welcome_email(to: str, username: str) -> None:
+    """Send a welcome email to a newly registered user."""
+    html = f"""
+<html><body style="font-family:Georgia,serif;color:#292524;max-width:480px;margin:0 auto;padding:32px 16px">
+  <h2 style="font-size:1.4rem;margin-bottom:8px">Welcome to ymmy, {username}!</h2>
+  <p style="color:#57534e">You're all set. Start reading today's news in your target language and build your vocabulary as you go.</p>
+  <p style="margin-top:24px">
+    <a href="https://ymmy.app" style="background:#fbbf24;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:0.9rem">Open ymmy →</a>
+  </p>
+  <p style="margin-top:32px;font-size:0.8rem;color:#a8a29e">You're receiving this because you just created an account. Questions? Reply to this email.</p>
+</body></html>
+"""
+    text = f"Welcome to ymmy, {username}!\n\nYou're all set — start reading at https://ymmy.app"
+    send_email(to, "Welcome to ymmy!", html, text)

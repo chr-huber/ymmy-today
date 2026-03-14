@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Welcome — ymmy</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { fontFamily: { serif: ['Georgia', 'serif'] } } }
+    }
+  </script>
+</head>
+<body class="bg-stone-50 text-stone-800 min-h-screen flex items-center justify-center px-4">
+
+  <div class="w-full max-w-sm text-center">
+    <a href="/" class="text-2xl font-bold tracking-tight font-serif hover:text-amber-700 transition-colors">ymmy</a>
+
+    <div class="bg-white border border-stone-200 rounded-2xl shadow-sm p-8 mt-8">
+      <div class="text-4xl mb-4">👋</div>
+      <h1 class="text-xl font-bold font-serif mb-2">Welcome, {{ user.username }}!</h1>
+      <p class="text-sm text-stone-500 mb-6">
+        Your account is ready. Read today's news in your target language, save words as you go, and review them with flashcards.
+      </p>
+
+      <div class="space-y-3 text-left text-sm text-stone-600 mb-8">
+        <div class="flex items-start gap-3">
+          <span class="text-amber-500 font-bold mt-0.5">1</span>
+          <span>Pick a language and CEFR level from the menu on the home page.</span>
+        </div>
+        <div class="flex items-start gap-3">
+          <span class="text-amber-500 font-bold mt-0.5">2</span>
+          <span>Tap any word while reading to save it to your vocabulary.</span>
+        </div>
+        <div class="flex items-start gap-3">
+          <span class="text-amber-500 font-bold mt-0.5">3</span>
+          <span>Come back daily to review saved words with spaced-repetition flashcards.</span>
+        </div>
+      </div>
+
+      <a href="/"
+         class="block w-full bg-amber-400 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-amber-500 transition-colors">
+        Start reading →
+      </a>
+    </div>
+  </div>
+
+</body>
+</html>

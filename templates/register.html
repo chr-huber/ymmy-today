@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sign in — ymmy</title>
+  <title>Sign up — ymmy</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -16,7 +16,7 @@
   <div class="w-full max-w-sm">
     <div class="text-center mb-8">
       <a href="/" class="text-2xl font-bold tracking-tight font-serif hover:text-amber-700 transition-colors">ymmy</a>
-      <p class="text-sm text-stone-400 mt-1">Sign in to track your progress</p>
+      <p class="text-sm text-stone-400 mt-1">Create your account</p>
     </div>
 
     <div class="bg-white border border-stone-200 rounded-2xl shadow-sm p-6">
@@ -26,30 +26,39 @@
       </div>
       {% endif %}
 
-      <form method="post" action="/login" class="space-y-4">
+      <form method="post" action="/register" class="space-y-4">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div>
           <label for="username" class="block text-xs font-semibold text-stone-400 uppercase tracking-wide mb-1">Username</label>
           <input type="text" id="username" name="username" required autofocus
+                 value="{{ username or '' }}"
+                 class="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent">
+        </div>
+        <div>
+          <label for="email" class="block text-xs font-semibold text-stone-400 uppercase tracking-wide mb-1">Email</label>
+          <input type="email" id="email" name="email" required
+                 value="{{ email or '' }}"
                  class="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent">
         </div>
         <div>
           <label for="password" class="block text-xs font-semibold text-stone-400 uppercase tracking-wide mb-1">Password</label>
-          <input type="password" id="password" name="password" required
+          <input type="password" id="password" name="password" required minlength="8"
+                 class="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent">
+        </div>
+        <div>
+          <label for="password_confirm" class="block text-xs font-semibold text-stone-400 uppercase tracking-wide mb-1">Confirm password</label>
+          <input type="password" id="password_confirm" name="password_confirm" required minlength="8"
                  class="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent">
         </div>
         <button type="submit"
                 class="w-full bg-amber-400 text-white rounded-lg py-2 text-sm font-medium hover:bg-amber-500 transition-colors">
-          Sign in
+          Sign up
         </button>
       </form>
     </div>
 
     <p class="text-center mt-4 text-xs text-stone-400">
-      No account? <a href="/register" class="hover:text-stone-600 transition-colors">Create one →</a>
-    </p>
-    <p class="text-center mt-2 text-xs text-stone-400">
-      <a href="/" class="hover:text-stone-600 transition-colors">Continue without signing in →</a>
+      Already have an account? <a href="/login" class="hover:text-stone-600 transition-colors">Sign in →</a>
     </p>
   </div>
 

@@ -5,6 +5,9 @@ Start with:
   uvicorn api.main:app --reload --port 8000
 
 Routes:
+  GET  /register               self-service signup
+  POST /register               create account
+  GET  /welcome                post-signup welcome page
   GET  /                       article list (processed only)
   GET  /article/{id}           article reader
   GET  /flashcards             flashcard review session
@@ -41,7 +44,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from starlette.middleware.sessions import SessionMiddleware
 
-from services.email_service import smtp_configured
+from services.email_service import smtp_configured, send_welcome_email
 from services.newsletter_service import (
     add_subscriber,
     confirm_subscriber,
@@ -66,6 +69,7 @@ from services.news_service import (
     TRUSTED_SOURCES,
     clear_database,
     clear_language_data,
+    create_user,
     db_connect,
     get_article,
     get_due_count,
@@ -324,6 +328,71 @@ async def login_submit(
 async def logout(request: Request):
     request.session.clear()
     return RedirectResponse(url="/", status_code=303)
+
+
+# ── Register ──────────────────────────────────────────────────────────────────
+
+@app.get("/register", response_class=HTMLResponse)
+async def register_page(request: Request):
+    if get_optional_user(request):
+        return RedirectResponse(url="/", status_code=303)
+    context = await get_template_context(request)
+    return templates.TemplateResponse("register.html", context)
+
+
+@app.post("/register")
+@limiter.limit("5/minute")
+async def register_submit(
+    request: Request,
+    username: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(...),
+    password_confirm: str = Form(...),
+):
+    if not await verify_csrf_token(request):
+        context = await get_template_context(request)
+        context["error"] = "Invalid CSRF token"
+        return templates.TemplateResponse("register.html", context, status_code=403)
+
+    context = await get_template_context(request)
+    context["username"] = username
+    context["email"] = email
+
+    if password != password_confirm:
+        context["error"] = "Passwords do not match"
+        return templates.TemplateResponse("register.html", context, status_code=400)
+    if len(password) < 8:
+        context["error"] = "Password must be at least 8 characters"
+        return templates.TemplateResponse("register.html", context, status_code=400)
+    if len(username) < 2:
+        context["error"] = "Username must be at least 2 characters"
+        return templates.TemplateResponse("register.html", context, status_code=400)
+
+    try:
+        user_id = create_user(username, password, email=email)
+    except ValueError as e:
+        context["error"] = str(e)
+        return templates.TemplateResponse("register.html", context, status_code=400)
+
+    request.session["user_id"] = user_id
+
+    if smtp_configured():
+        try:
+            send_welcome_email(email, username)
+        except Exception:
+            logging.warning("Welcome email failed for %s", email, exc_info=True)
+
+    return RedirectResponse(url="/welcome", status_code=303)
+
+
+@app.get("/welcome", response_class=HTMLResponse)
+async def welcome_page(request: Request):
+    user = get_optional_user(request)
+    if not user:
+        return RedirectResponse(url="/register", status_code=303)
+    context = await get_template_context(request)
+    context["user"] = user
+    return templates.TemplateResponse("welcome.html", context)
 
 
 # ── Reader pages ──────────────────────────────────────────────────────────────

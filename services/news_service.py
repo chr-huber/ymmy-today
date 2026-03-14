@@ -98,16 +98,17 @@ def _verify_password(password: str, stored_hash: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def create_user(username: str, password: str) -> int:
-    """Create a new user. Returns the new user id. Raises ValueError if username taken."""
+def create_user(username: str, password: str, email: Optional[str] = None) -> int:
+    """Create a new user. Returns the new user id. Raises ValueError if username or email taken."""
     with db_connect() as db:
-        existing = db.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
-        if existing:
+        if db.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone():
             raise ValueError(f"Username '{username}' is already taken.")
+        if email and db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone():
+            raise ValueError(f"An account with that email already exists.")
         password_hash = _hash_password(password)
         cursor = db.execute(
-            "INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)",
-            (username, password_hash, now_iso()),
+            "INSERT INTO users (username, email, password_hash, created_at) VALUES (?, ?, ?, ?)",
+            (username, email or None, password_hash, now_iso()),
         )
         db.commit()
         return cursor.lastrowid
@@ -806,6 +807,7 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS users (
                 id           INTEGER PRIMARY KEY AUTOINCREMENT,
                 username     TEXT NOT NULL UNIQUE,
+                email        TEXT UNIQUE,
                 password_hash TEXT NOT NULL,
                 language     TEXT NOT NULL DEFAULT 'Finnish',
                 level        TEXT NOT NULL DEFAULT 'A2',
@@ -877,6 +879,7 @@ def init_db() -> None:
         ensure_column(db, "processed_articles", "llm_tokens INTEGER DEFAULT 0")
         ensure_column(db, "processed_articles", "processing_time REAL DEFAULT 0")
         ensure_column(db, "pipeline_events", "run_id TEXT")
+        ensure_column(db, "users", "email TEXT")
         db.execute("CREATE INDEX IF NOT EXISTS idx_articles_source_name ON articles(source_name)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_articles_published_created ON articles(published, created_at)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_articles_is_read ON articles(is_read)")
