@@ -1683,6 +1683,7 @@ Rules:
 - Topic-specific vocabulary (names, places, events) may exceed typical level frequency — this is expected and acceptable.
 - Avoid grammar structures beyond each level's guidelines.
 - Sentences should gradually increase in complexity: sentences 1–3 simplest, 8-10 slightly more complex but still within level.
+- Never repeat the same sentence or fact. If the source article cannot support 10 distinct facts, write fewer sentences rather than repeating. Minimum 5 sentences.
 
 Return ONLY valid JSON where simple_text and english_translation are arrays of strings (one string per sentence):
 {{
