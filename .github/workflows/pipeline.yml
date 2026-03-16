@@ -24,7 +24,7 @@ jobs:
           curl -sf --max-time 600 -X POST \
             -u "admin:${{ secrets.ADMIN_PASSWORD }}" \
             https://ymmy.fly.dev/admin/run \
-            -d "top_n=${{ inputs.top_n_a1 }}&levels=A1&languages=Finnish"
+            -d "top_n=${{ inputs.top_n_a1 || '3' }}&levels=A1&languages=Finnish"
 
   run-a2:
     name: Run pipeline (A2)
@@ -36,4 +36,4 @@ jobs:
           curl -sf --max-time 600 -X POST \
             -u "admin:${{ secrets.ADMIN_PASSWORD }}" \
             https://ymmy.fly.dev/admin/run \
-            -d "top_n=${{ inputs.top_n_a2 }}&levels=A2&languages=Finnish"
+            -d "top_n=${{ inputs.top_n_a2 || '1' }}&levels=A2&languages=Finnish"
