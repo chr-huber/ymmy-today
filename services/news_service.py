@@ -1503,11 +1503,11 @@ Rules:
 - Sentence 1 MUST be a one-sentence summary lede: the single most important fact of the story, written as a punchy newspaper opener.
 - Keep facts accurate to the source. Do not invent new facts.
 {char_instruction}- Vary sentence structure throughout — avoid repeating the same subject-verb pattern more than twice consecutively.
-- Always write exactly 10 sentences unless the source content genuinely cannot support 10 distinct facts.
+- Always write exactly 9 sentences unless the source content genuinely cannot support 9 distinct facts.
 - Use grammatical complexity appropriate to {target_level} (see guidelines above).
 - Topic-specific vocabulary (names, places, events) may exceed typical {target_level} frequency — this is expected and acceptable.
 - Avoid grammar structures beyond the {target_level} guidelines.
-- Sentences should gradually increase in complexity: sentences 1–3 simplest, 8-10 slightly more complex but still within level.
+- Sentences should gradually increase in complexity: sentences 1–3 simplest, 7-9 slightly more complex but still within level.
 
 Return ONLY valid JSON where simple_text and english_translation are arrays of strings (one string per sentence):
 {{
@@ -1762,7 +1762,7 @@ Task:
 Generate simplified {target_language} versions of this news article at {len(levels)} CEFR levels: {levels_str}.
 
 For EACH level:
-1) Rewrite in simple {target_language} at that CEFR level, exactly 10 sentences (unless the source genuinely cannot support 10 distinct facts).
+1) Rewrite in simple {target_language} at that CEFR level, exactly 9 sentences (unless the source genuinely cannot support 9 distinct facts).
 2) Translate each sentence into natural English.
 
 CEFR Level Guidelines:
@@ -1776,8 +1776,8 @@ Rules:
 - Use grammatical complexity appropriate to each CEFR level (see guidelines above).
 - Topic-specific vocabulary (names, places, events) may exceed typical level frequency — this is expected and acceptable.
 - Avoid grammar structures beyond each level's guidelines.
-- Sentences should gradually increase in complexity: sentences 1–3 simplest, 8-10 slightly more complex but still within level.
-- Never repeat the same sentence or fact. If the source article cannot support 10 distinct facts, write fewer sentences rather than repeating. Minimum 5 sentences.
+- Sentences should gradually increase in complexity: sentences 1–3 simplest, 7-9 slightly more complex but still within level.
+- Never repeat the same sentence or fact. If the source article cannot support 9 distinct facts, write fewer sentences rather than repeating. Minimum 5 sentences.
 
 Return ONLY valid JSON where simple_text and english_translation are arrays of strings (one string per sentence):
 {{
