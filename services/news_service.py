@@ -1555,6 +1555,7 @@ Content: {article_text}
 You will receive numbered {target_language} sentences (0-indexed) and their English translations.
 
 Fix any: grammar errors, wrong case endings{f', vowel harmony mistakes' if target_language == 'Finnish' else ''}, unnatural phrasing, complexity exceeding {target_level}.
+Naturalness is a priority — rewrite any sentence that a native speaker would find awkward, even if technically correct.
 Topic vocabulary being advanced is intentional — do not simplify it.
 
 {target_language} sentences (0-indexed):
@@ -1564,7 +1565,7 @@ English translations (0-indexed):
 {json.dumps(list(enumerate(step1_english)), ensure_ascii=False)}
 
 Return JSON only. For corrections, include ONLY sentences that need changes — omit correct sentences entirely. If nothing needs fixing, return an empty array.
-Also extract 6 key vocabulary words and add grammar notes (max 2, empty array if none noteworthy).
+Also extract 6 key vocabulary words and add 2-3 grammar notes. Each grammar note must be a full explanation (2-4 sentences) covering what the structure is, why it is used here, and how a learner can apply it generally. Choose the most pedagogically interesting structures — prefer noteworthy grammar over obvious ones.
 
 confirmed_level: assess what CEFR level this text actually reads as AFTER your corrections. \
 Base this on sentence length, grammar structures used, and vocabulary complexity. \
@@ -1850,6 +1851,7 @@ Content: {article_text}
     step2_prompt = f"""You are a {target_language} language expert reviewing text written for language learners at multiple CEFR levels: {levels_str}.
 
 Fix any: grammar errors, wrong case endings{f', vowel harmony mistakes' if target_language == 'Finnish' else ''}, unnatural phrasing, complexity exceeding the level.
+Naturalness is a priority — rewrite any sentence that a native speaker would find awkward, even if technically correct.
 Topic vocabulary being advanced is intentional — do not simplify it. Rewrite any repeated or near-identical sentences.
 
 {level_texts}
@@ -1858,7 +1860,7 @@ For EACH level return:
 - confirmed_level: assess what CEFR level this text actually reads as AFTER your corrections. Base this on sentence length, grammar structures used, and vocabulary complexity. If the corrected text clearly reads as a different level than intended, report that level instead (must be one of: {levels_str}). Otherwise confirm the intended level.
 - corrections: ONLY sentences that need changes (omit correct sentences — empty array if all OK)
 - keywords: 6 key vocabulary words from the (corrected) {target_language} sentences. Prioritize verbs, case-inflected nouns, news-context words. Include base_form, translation, used_form, used_form_translation, grammatical_form.
-- grammar_notes: max 2 pedagogical notes for language learners — highlight interesting grammar structures in the text (e.g. a case usage, verb form, sentence pattern). Do NOT describe corrections you made. Empty array if nothing noteworthy. Explanations in English. Grammar notes must only explain structures appropriate to that level — do not explain A2/B1 structures in an A1 text.
+- grammar_notes: 2-3 pedagogical notes for language learners — highlight interesting grammar structures in the text (e.g. a case usage, verb form, sentence pattern). Each explanation must be 2-4 sentences: describe the structure, explain why it is used here, and show how a learner can apply it generally. Do NOT describe corrections you made. Explanations in English. Grammar notes must only explain structures appropriate to that level — do not explain A2/B1 structures in an A1 text.
 
 Return JSON only:
 {{
