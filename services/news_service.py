@@ -21,12 +21,13 @@ load_dotenv()
 
 DB_PATH = os.getenv("DATABASE_PATH", "news.db")
 
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "mistral")  # "mistral", "deepseek", "claude", or "openai"
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "mistral")  # "mistral", "deepseek", "claude", "openai", or "gemini"
 REVIEW_LLM_PROVIDER = os.getenv("REVIEW_LLM_PROVIDER", "claude")  # second-pass reviewer, defaults to claude
 MISTRAL_MODEL = os.getenv("MISTRAL_MODEL", "mistral-small-latest")
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-pro-preview-03-25")
 DEFAULT_TARGET_LANGUAGE = os.getenv("DEFAULT_TARGET_LANGUAGE", "Finnish")
 DEFAULT_TARGET_LEVEL = os.getenv("DEFAULT_TARGET_LEVEL", "A2")
 LEARNING_LANGUAGES = ["Finnish", "German"]
@@ -1317,6 +1318,13 @@ def _call_llm_api(provider: str, prompt: str, system_prompt: str) -> Dict[str, A
         api_url = "https://api.openai.com/v1/chat/completions"
         model = OPENAI_MODEL
         use_anthropic = False
+    elif provider == "gemini":
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            return {"error": "No GEMINI_API_KEY set"}
+        api_url = f"https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+        model = GEMINI_MODEL
+        use_anthropic = False
     else:
         return {"error": f"Unknown LLM provider: {provider}"}
 
@@ -1403,6 +1411,7 @@ def generate_learning_content(
         "deepseek": "DEEPSEEK_API_KEY",
         "claude": "ANTHROPIC_API_KEY",
         "openai": "OPENAI_API_KEY",
+        "gemini": "GEMINI_API_KEY",
     }
     if not os.getenv(key_map.get(provider, "")):
         return simple_fallback_transform(f"{title}\n\n{article_text}", target_language, target_level)
