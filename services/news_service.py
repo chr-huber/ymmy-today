@@ -35,7 +35,7 @@ ARTICLE_TOPICS = ["World", "Economics", "Life"]
 DEFAULT_VALIDATION_RETRIES = int(os.getenv("DEFAULT_VALIDATION_RETRIES", "2"))
 DEFAULT_AUTO_TOP_N = int(os.getenv("DEFAULT_AUTO_TOP_N", "4"))
 DEFAULT_AUTO_MAX_AGE_HOURS = int(os.getenv("DEFAULT_AUTO_MAX_AGE_HOURS", "6"))
-DEFAULT_MAX_WORKERS = int(os.getenv("DEFAULT_MAX_WORKERS", "8"))
+DEFAULT_MAX_WORKERS = int(os.getenv("DEFAULT_MAX_WORKERS", "4"))
 DEFAULT_AUTO_PER_SOURCE = int(os.getenv("DEFAULT_AUTO_PER_SOURCE", "12"))
 DEFAULT_MAX_PER_SOURCE_PREFILTER = int(os.getenv("DEFAULT_MAX_PER_SOURCE_PREFILTER", "2"))
 DEFAULT_MAX_PER_SOURCE_FINAL = int(os.getenv("DEFAULT_MAX_PER_SOURCE_FINAL", "1"))
@@ -3978,6 +3978,16 @@ def purge_old_articles(keep_days: int = 7) -> Dict[str, int]:
 
         cur = db.execute("DELETE FROM auto_pick_runs WHERE created_at < ?", (cutoff,))
         deleted["auto_pick_runs"] = cur.rowcount or 0
+
+        # Prune llm_cache and processing_log for archived articles (content already stored)
+        for table in ("llm_cache", "processing_log"):
+            cur = db.execute(
+                f"""DELETE FROM {table} WHERE article_id IN (
+                    SELECT id FROM articles WHERE is_archived = 1 AND COALESCE(published, created_at) < ?
+                )""",
+                (cutoff,),
+            )
+            deleted[table] = deleted.get(table, 0) + (cur.rowcount or 0)
 
         db.commit()
 
