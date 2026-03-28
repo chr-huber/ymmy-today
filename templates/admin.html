@@ -45,6 +45,7 @@
           <option value="deepseek" {% if llm_provider == "deepseek" %}selected{% endif %}>DeepSeek</option>
           <option value="claude"   {% if llm_provider == "claude"   %}selected{% endif %}>Claude</option>
           <option value="openai"   {% if llm_provider == "openai"   %}selected{% endif %}>OpenAI</option>
+          <option value="gemini"   {% if llm_provider == "gemini"   %}selected{% endif %}>Gemini</option>
         </select>
       </div>
       <div>
@@ -54,6 +55,7 @@
           <option value="mistral"  {% if review_llm_provider == "mistral"  %}selected{% endif %}>Mistral</option>
           <option value="deepseek" {% if review_llm_provider == "deepseek" %}selected{% endif %}>DeepSeek</option>
           <option value="openai"   {% if review_llm_provider == "openai"   %}selected{% endif %}>OpenAI</option>
+          <option value="gemini"   {% if review_llm_provider == "gemini"   %}selected{% endif %}>Gemini</option>
         </select>
       </div>
     </div>

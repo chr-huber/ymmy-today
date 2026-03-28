@@ -61,6 +61,7 @@ from services.news_service import (
     DEFAULT_AUTO_TOP_N,
     DEFAULT_TARGET_LANGUAGE,
     DEFAULT_TARGET_LEVEL,
+    GEMINI_MODEL,
     LEARNING_LANGUAGES,
     LLM_PROVIDER,
     MISTRAL_MODEL,
@@ -948,7 +949,7 @@ async def admin_run_pipeline(
     # No CSRF check — this endpoint is protected by HTTP Basic Auth (used by Bitbucket curl)
     top_n = max(1, min(top_n, 100))
 
-    valid_providers = ["mistral", "deepseek", "claude", "openai"]
+    valid_providers = ["mistral", "deepseek", "claude", "openai", "gemini"]
     if provider not in valid_providers:
         provider = LLM_PROVIDER
     if review_provider not in valid_providers:
