@@ -1,5 +1,5 @@
 # Weekdays at 05:00, 10:00, 15:00, 20:00 UTC
-0 5,10,15,20 * * 1-5 curl -sf --max-time 600 -X POST -u "admin:$ADMIN_PASSWORD" http://ymmy.internal:8080/admin/run -d "top_n=3&levels=A1&languages=Finnish" && curl -sf --max-time 600 -X POST -u "admin:$ADMIN_PASSWORD" http://ymmy.internal:8080/admin/run -d "top_n=1&levels=A2&languages=Finnish"
+0 5,10,15,20 * * 1-5 curl -sf --max-time 600 -X POST -u "admin:$ADMIN_PASSWORD" https://ymmy.fly.dev/admin/run -d "top_n=3&levels=A1&languages=Finnish" && curl -sf --max-time 600 -X POST -u "admin:$ADMIN_PASSWORD" https://ymmy.fly.dev/admin/run -d "top_n=1&levels=A2&languages=Finnish"
 
 # Sundays at 05:00 UTC
-0 5 * * 0 curl -sf --max-time 120 -X POST -u "admin:$ADMIN_PASSWORD" http://ymmy.internal:8080/admin/send-digest
+0 5 * * 0 curl -sf --max-time 120 -X POST -u "admin:$ADMIN_PASSWORD" https://ymmy.fly.dev/admin/send-digest

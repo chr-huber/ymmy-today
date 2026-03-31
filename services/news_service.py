@@ -24,6 +24,7 @@ DB_PATH = os.getenv("DATABASE_PATH", "news.db")
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "mistral")  # "mistral", "deepseek", "claude", "openai", or "gemini"
 REVIEW_LLM_PROVIDER = os.getenv("REVIEW_LLM_PROVIDER", "claude")  # second-pass reviewer, defaults to claude
 MISTRAL_MODEL = os.getenv("MISTRAL_MODEL", "mistral-small-latest")
+REVIEW_MISTRAL_MODEL = os.getenv("REVIEW_MISTRAL_MODEL", MISTRAL_MODEL)
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
@@ -1285,7 +1286,7 @@ def simple_fallback_transform(text: str, target_language: str, target_level: str
     }
 
 
-def _call_llm_api(provider: str, prompt: str, system_prompt: str) -> Dict[str, Any]:
+def _call_llm_api(provider: str, prompt: str, system_prompt: str, is_review: bool = False) -> Dict[str, Any]:
     """Call LLM API (Mistral, DeepSeek, Claude, or OpenAI) with given prompts.
     
     Returns {'content': str, 'tokens': int} on success, or {'error': str} on failure.
@@ -1295,7 +1296,7 @@ def _call_llm_api(provider: str, prompt: str, system_prompt: str) -> Dict[str, A
         if not api_key:
             return {"error": "No MISTRAL_API_KEY set"}
         api_url = os.getenv("MISTRAL_API_URL", "https://api.mistral.ai/v1/chat/completions")
-        model = MISTRAL_MODEL
+        model = REVIEW_MISTRAL_MODEL if is_review else MISTRAL_MODEL
         use_anthropic = False
     elif provider == "deepseek":
         api_key = os.getenv("DEEPSEEK_API_KEY")
@@ -1600,7 +1601,7 @@ Otherwise confirm {target_level}.
         f"You are a {target_language} language expert and pedagogy specialist. "
         "Grammar explanations must be in English. Return only valid JSON."
     )
-    step2_result = _call_llm_api(review_provider, step2_prompt, step2_system)
+    step2_result = _call_llm_api(review_provider, step2_prompt, step2_system, is_review=True)
     if "error" in step2_result:
         return step2_result
 
@@ -1873,7 +1874,7 @@ Return JSON only:
         "Grammar explanations must be in English. Return only valid JSON."
     )
 
-    step2_result = _call_llm_api(review_provider, step2_prompt, step2_system)
+    step2_result = _call_llm_api(review_provider, step2_prompt, step2_system, is_review=True)
     if "error" in step2_result:
         return step2_result
 
