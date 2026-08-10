@@ -24,6 +24,7 @@
 <div class="bg-white rounded-xl border border-stone-200 p-5 mb-4">
   <h2 class="font-serif font-semibold mb-3">Send Digest</h2>
   <form method="post" action="/admin/newsletter/send" class="flex flex-wrap items-end gap-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <div>
       <label class="block text-xs font-semibold text-stone-400 uppercase tracking-wide mb-1">Language</label>
       <select name="language" class="border border-stone-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400">
@@ -48,33 +49,84 @@
   </form>
 </div>
 
-<!-- Subscribers -->
-<div class="bg-white rounded-xl border border-stone-200 overflow-hidden mb-4">
-  <div class="px-5 py-3.5 border-b border-stone-100">
-    <h2 class="font-serif font-semibold">Subscribers</h2>
-  </div>
-  {% if subscribers %}
-  <div class="divide-y divide-stone-50">
-    {% for sub in subscribers %}
-    <div class="px-4 py-2.5 flex items-center gap-3 hover:bg-stone-50">
-      <span class="text-xs w-16 flex-shrink-0 {% if sub.confirmed %}text-green-600{% else %}text-stone-400{% endif %}">
-        {{ 'confirmed' if sub.confirmed else 'pending' }}
-      </span>
-      <span class="text-sm text-stone-700 flex-1 truncate">{{ sub.email }}</span>
-      <span class="text-xs text-stone-400 w-16 flex-shrink-0">{{ sub.language }}</span>
-      <span class="text-xs text-stone-400 w-8 flex-shrink-0">{{ sub.level or '—' }}</span>
-      <span class="text-xs text-stone-400 w-24 flex-shrink-0 hidden sm:block">{{ sub.created_at[:10] }}</span>
-      <form method="post" action="/admin/newsletter/delete/{{ sub.id }}"
-            onsubmit="return confirm('Remove {{ sub.email }}?')">
-        <button type="submit" class="text-xs text-red-400 hover:text-red-600 transition-colors">remove</button>
-      </form>
+<!-- Clean up -->
+<div class="bg-white rounded-xl border border-stone-200 p-5 mb-4">
+  <h2 class="font-serif font-semibold mb-1">Clean up</h2>
+  <p class="text-xs text-stone-400 mb-3">
+    Signups that never clicked the confirmation link are almost always bots. They never receive
+    a digest, but removing them keeps the list honest.
+  </p>
+  <form method="post" action="/admin/newsletter/delete-unconfirmed"
+        class="flex flex-wrap items-end gap-3"
+        onsubmit="return confirm('Remove all unconfirmed signups older than the selected age? This cannot be undone.')">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div>
+      <label class="block text-xs font-semibold text-stone-400 uppercase tracking-wide mb-1">Older than</label>
+      <select name="older_than_days" class="border border-stone-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400">
+        <option value="0">any age</option>
+        <option value="1">1 day</option>
+        <option value="3">3 days</option>
+        <option value="7" selected>7 days</option>
+        <option value="30">30 days</option>
+      </select>
     </div>
-    {% endfor %}
-  </div>
-  {% else %}
-  <p class="px-5 py-4 text-sm text-stone-400">No subscribers yet.</p>
-  {% endif %}
+    <button type="submit"
+            class="bg-red-500 hover:bg-red-600 text-white rounded-lg px-4 py-1.5 text-sm font-medium transition-colors">
+      Remove unconfirmed signups
+    </button>
+  </form>
 </div>
+
+<!-- Subscribers -->
+<!-- One form wraps the list so both the bulk action and the per-row buttons
+     (via formaction) can post the same checkboxes and CSRF token. -->
+<form method="post" action="/admin/newsletter/delete-selected">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="bg-white rounded-xl border border-stone-200 overflow-hidden mb-4">
+    <div class="px-5 py-3.5 border-b border-stone-100 flex items-center gap-3">
+      <h2 class="font-serif font-semibold">Subscribers</h2>
+      {% if subscribers %}
+      <label class="flex items-center gap-2 text-xs text-stone-500 ml-3">
+        <input type="checkbox" class="rounded"
+               onclick="document.querySelectorAll('input[name=subscriber_ids]').forEach(c => c.checked = this.checked)">
+        Select all
+      </label>
+      <button type="submit"
+              onclick="return confirm('Remove the selected subscribers? This cannot be undone.')"
+              class="ml-auto text-xs bg-red-500 hover:bg-red-600 text-white rounded-lg px-3 py-1 font-medium transition-colors">
+        Remove selected
+      </button>
+      {% endif %}
+    </div>
+    {% if subscribers %}
+    <div class="divide-y divide-stone-50">
+      {% for sub in subscribers %}
+      <div class="px-4 py-2.5 flex items-center gap-3 hover:bg-stone-50 {% if not sub.confirmed %}bg-amber-50/40{% endif %}">
+        <input type="checkbox" name="subscriber_ids" value="{{ sub.id }}" class="rounded flex-shrink-0">
+        <span class="text-xs w-16 flex-shrink-0 {% if sub.confirmed %}text-green-600{% else %}text-stone-400{% endif %}">
+          {{ 'confirmed' if sub.confirmed else 'pending' }}
+        </span>
+        <span class="text-sm text-stone-700 flex-1 truncate">{{ sub.email }}</span>
+        <span class="text-xs text-stone-400 w-28 flex-shrink-0 truncate hidden md:block" title="{{ sub.signup_ip or '' }}">
+          {{ sub.signup_ip or '—' }}
+          {% if sub.shared_ip_count > 1 %}
+          <span class="text-red-500 font-medium" title="This IP signed up {{ sub.shared_ip_count }} times">×{{ sub.shared_ip_count }}</span>
+          {% endif %}
+        </span>
+        <span class="text-xs text-stone-400 w-16 flex-shrink-0">{{ sub.language }}</span>
+        <span class="text-xs text-stone-400 w-8 flex-shrink-0">{{ sub.level or '—' }}</span>
+        <span class="text-xs text-stone-400 w-24 flex-shrink-0 hidden sm:block">{{ sub.created_at[:10] }}</span>
+        <button type="submit" formaction="/admin/newsletter/delete/{{ sub.id }}"
+                onclick="return confirm('Remove {{ sub.email }}?')"
+                class="text-xs text-red-400 hover:text-red-600 transition-colors">remove</button>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="px-5 py-4 text-sm text-stone-400">No subscribers yet.</p>
+    {% endif %}
+  </div>
+</form>
 
 <!-- Digest History -->
 <div class="bg-white rounded-xl border border-stone-200 overflow-hidden">

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Confirm sign-in — ymmy</title>
+  <link rel="stylesheet" href="/static/css/tailwind.css?v=20260310">
+  <script>if (localStorage.getItem('dark-mode') === 'true') document.documentElement.classList.add('dark');</script>
+</head>
+<body class="font-sans bg-paper dark:bg-stone-950 text-stone-800 dark:text-stone-100 min-h-screen flex items-center justify-center px-4">
+
+  <div class="w-full max-w-sm">
+    <div class="text-center mb-8">
+      <span class="text-2xl font-bold tracking-tight font-serif">ymmy</span>
+      <p class="text-sm text-stone-400 dark:text-stone-500 mt-1">Admin sign-in</p>
+    </div>
+
+    <div class="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-2xl shadow-sm p-6 text-center">
+      {% if valid %}
+      <p class="text-sm text-stone-500 dark:text-stone-400 mb-4">
+        Your link is valid. Confirm to open an admin session on this device.
+      </p>
+      <!-- The token is spent by this POST, not by loading the page, so link
+           prefetching by mail scanners cannot consume it. -->
+      <form method="post" action="/admin/auth/{{ token }}">
+        <button type="submit"
+                class="w-full bg-finnish-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-finnish-700 transition-colors">
+          Sign in to admin
+        </button>
+      </form>
+      {% else %}
+      <p class="text-sm text-red-600 dark:text-red-400 mb-2">This link is no longer valid.</p>
+      <p class="text-xs text-stone-400 dark:text-stone-500 mb-4">
+        Sign-in links expire quickly and work only once. Requesting a new link also
+        voids any older one.
+      </p>
+      <a href="/admin/login"
+         class="inline-block w-full bg-finnish-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-finnish-700 transition-colors">
+        Request a new link
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+</body>
+</html>

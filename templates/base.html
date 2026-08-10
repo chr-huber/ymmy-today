@@ -166,6 +166,12 @@
       <p class="text-sm font-semibold text-stone-700 dark:text-stone-200 mb-4">Weekly digest by email</p>
       <form method="post" action="/subscribe" class="flex flex-col gap-3">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="{{ form_token_field }}" value="{{ subscribe_form_token }}">
+        <!-- Anti-bot honeypot: hidden from users, irresistible to scripts. -->
+        <div aria-hidden="true" style="position:absolute;left:-9999px;top:-9999px;height:0;width:0;overflow:hidden">
+          <label for="sub-website">Website</label>
+          <input type="text" id="sub-website" name="{{ honeypot_field }}" tabindex="-1" autocomplete="off">
+        </div>
         <input type="email" name="email" required placeholder="your@email.com"
                class="border border-stone-200 dark:border-stone-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-finnish-400 w-full" />
         <input type="hidden" name="language" value="Finnish">

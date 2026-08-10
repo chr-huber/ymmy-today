@@ -11,12 +11,24 @@ Routes:
   GET  /                       article list (processed only)
   GET  /article/{id}           article reader
   GET  /flashcards             flashcard review session
-  GET  /admin                  admin panel (HTTP Basic Auth)
+  GET  /admin/login            request a passwordless admin sign-in link
+  POST /admin/login            email a single-use link to ADMIN_EMAIL
+  GET  /admin/auth/{token}     confirm page for an emailed link (does not spend it)
+  POST /admin/auth/{token}     spend the link, open an admin session
+  POST /admin/logout           end the admin session
+  GET  /admin                  admin panel (magic-link session, or Basic Auth for cron)
   POST /admin/run              run auto pipeline
   POST /admin/ingest           fetch RSS headlines only
   POST /admin/process/{id}     process a single article
   POST /admin/clear            clear database
   POST /admin/send-digest      send weekly newsletter digest (admin)
+  GET  /admin/users            user list with signup IPs and bot flags
+  POST /admin/users/delete/{id}            delete one user (+ their reads/words)
+  POST /admin/users/delete-selected        bulk delete checked users
+  POST /admin/users/delete-unconfirmed     purge accounts that never confirmed
+  POST /admin/newsletter/delete/{id}       remove one subscriber
+  POST /admin/newsletter/delete-selected   bulk remove checked subscribers
+  POST /admin/newsletter/delete-unconfirmed purge unconfirmed signups
   POST /subscribe              subscribe to the weekly newsletter
   GET  /confirm/{token}        confirm newsletter subscription
   GET  /unsubscribe/{token}    unsubscribe from newsletter
@@ -30,6 +42,7 @@ import logging
 import os
 import secrets
 import hashlib
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
@@ -41,14 +54,40 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 from starlette.middleware.sessions import SessionMiddleware
 
+from services.admin_auth import (
+    SESSION_DAYS as ADMIN_SESSION_DAYS,
+    TOKEN_TTL_MINUTES as ADMIN_TOKEN_TTL_MINUTES,
+    admin_email,
+    clear_session_auth as clear_admin_session,
+    consume_login_token,
+    create_login_token,
+    magic_link_available,
+    mark_session_authed as mark_admin_session_authed,
+    purge_expired_tokens,
+    send_login_link,
+    session_is_authed as admin_session_is_authed,
+    token_is_valid,
+)
+from services.antibot import (
+    FORM_TOKEN_FIELD,
+    HONEYPOT_FIELD,
+    check_bot_signals,
+    client_ip,
+    form_token,
+    normalize_email,
+    validate_email,
+    validate_username,
+)
 from services.email_service import smtp_configured, send_welcome_email, send_confirmation_email, send_password_reset_email
 from services.newsletter_service import (
     add_subscriber,
     confirm_subscriber,
+    count_recent_subscriptions_from_ip,
     delete_subscriber as newsletter_delete_subscriber,
+    delete_subscribers as newsletter_delete_subscribers,
+    delete_unconfirmed_subscribers,
     get_all_subscribers,
     get_digest_log,
     send_weekly_digest,
@@ -71,12 +110,17 @@ from services.news_service import (
     clear_database,
     clear_language_data,
     confirm_user_email,
+    count_recent_signups_from_ip,
     create_email_confirm_token,
     create_password_reset_token,
     create_user,
+    delete_unconfirmed_users,
+    delete_user,
+    delete_users,
     get_all_users,
     get_user_by_reset_token,
     reset_user_password,
+    resolve_quality_issue,
     db_connect,
     get_article,
     get_due_count,
@@ -130,7 +174,15 @@ if _session_secret == "change-me-in-production":
         sys.exit(1)
     logging.warning("SESSION_SECRET_KEY is not set — using insecure default. Set this env var in production!")
 
-limiter = Limiter(key_func=get_remote_address)
+_admin_password = os.getenv("ADMIN_PASSWORD", "")
+if os.getenv("FLY_APP_NAME") and (not _admin_password or _admin_password in {"admin", "test", "changeme"}):
+    import sys
+    logging.critical("ADMIN_PASSWORD is unset or left at a default value in production. Refusing to start.")
+    sys.exit(1)
+
+# Behind the Fly proxy every request appears to come from the proxy, which would
+# make a single shared bucket out of every per-IP limit below. Key on the real client.
+limiter = Limiter(key_func=client_ip)
 app = FastAPI(title="ymmy")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -158,26 +210,62 @@ async def add_caching_headers(request: Request, call_next):
     return response
 
 
-security = HTTPBasic()
+# auto_error=False so a browser with no Authorization header falls through to the
+# magic-link session check instead of triggering the Basic Auth popup.
+security = HTTPBasic(auto_error=False)
 
 
-def require_admin(credentials: HTTPBasicCredentials = Depends(security)):
+class AdminAuthRequired(Exception):
+    """Raised when a browser reaches an admin page without a valid admin session."""
+
+
+@app.exception_handler(AdminAuthRequired)
+async def admin_auth_required_handler(request: Request, exc: AdminAuthRequired):
+    return RedirectResponse(url="/admin/login", status_code=303)
+
+
+def _basic_credentials_ok(credentials: HTTPBasicCredentials) -> bool:
     expected_username = os.getenv("ADMIN_USERNAME", "admin")
     password = os.getenv("ADMIN_PASSWORD", "admin")
     username_ok = secrets.compare_digest(credentials.username.encode(), expected_username.encode())
     password_ok = secrets.compare_digest(credentials.password.encode(), password.encode())
-    if not (username_ok and password_ok):
+    return username_ok and password_ok
+
+
+def require_admin(
+    request: Request,
+    credentials: Optional[HTTPBasicCredentials] = Depends(security),
+):
+    """
+    Admit either caller of the admin panel:
+
+    * machine callers (the supercronic cron process) send HTTP Basic Auth;
+    * you, in a browser, carry a session cookie from a magic-link sign-in.
+
+    An Authorization header means "machine": it is judged on its own merits and
+    a bad one gets 401 rather than a redirect, so curl fails loudly.
+    """
+    if credentials is not None:
+        if _basic_credentials_ok(credentials):
+            return credentials
+        # Slow brute-force attempts without making the admin panel painful to use.
+        time.sleep(1)
         raise HTTPException(
             status_code=401,
             detail="Incorrect credentials",
             headers={"WWW-Authenticate": "Basic"},
         )
-    return credentials
+
+    if admin_session_is_authed(request.session):
+        return None
+
+    raise AdminAuthRequired()
 
 
 @app.on_event("startup")
 def on_startup() -> None:
     init_db()
+    purge_expired_tokens()
 
 
 # ── CSRF Protection ──────────────────────────────────────────────────────────
@@ -202,10 +290,15 @@ async def verify_csrf_token(request: Request) -> bool:
 
 
 async def get_template_context(request: Request) -> Dict[str, Any]:
-    """Get common template context including CSRF token."""
+    """Get common template context including CSRF and anti-bot form tokens."""
     return {
         "request": request,
         "csrf_token": await generate_csrf_token(request),
+        # Signed render timestamps for the public forms — see services/antibot.py.
+        "subscribe_form_token": form_token("subscribe"),
+        "register_form_token": form_token("register"),
+        "honeypot_field": HONEYPOT_FIELD,
+        "form_token_field": FORM_TOKEN_FIELD,
     }
 
 
@@ -271,6 +364,15 @@ def _admin_time_label(published: Optional[str]) -> str:
     if dt is None:
         return published[:16] if len(published) >= 16 else published
     return dt.strftime("%Y-%m-%d %H:%M")
+
+
+def _mask_email(address: str) -> str:
+    """Partly obscure the admin address so the login page confirms it without publishing it."""
+    if not address or "@" not in address:
+        return ""
+    local, domain = address.rsplit("@", 1)
+    shown = local[:2] if len(local) > 2 else local[:1]
+    return f"{shown}{'•' * max(3, len(local) - len(shown))}@{domain}"
 
 
 def _source_color(source_name: str) -> str:
@@ -351,8 +453,14 @@ async def register_page(request: Request):
     return templates.TemplateResponse("register.html", context)
 
 
+# Accounts one IP may create per day. Bots come in bursts; humans do not.
+MAX_SIGNUPS_PER_IP_PER_DAY = int(os.getenv("MAX_SIGNUPS_PER_IP_PER_DAY", "3"))
+
+
 @app.post("/register")
-@limiter.limit("5/minute")
+# Generous, because rejected attempts count too and a real person may fumble the
+# form a few times. The hard cap on account creation is the per-IP daily quota below.
+@limiter.limit("15/hour")
 async def register_submit(
     request: Request,
     username: str = Form(...),
@@ -366,24 +474,42 @@ async def register_submit(
         return templates.TemplateResponse("register.html", context, status_code=403)
 
     context = await get_template_context(request)
+    username = (username or "").strip()
+    email = normalize_email(email)
     context["username"] = username
     context["email"] = email
 
+    def fail(message: str, status: int = 400):
+        context["error"] = message
+        return templates.TemplateResponse("register.html", context, status_code=status)
+
+    # Honeypot + time trap. Silently generic so bots learn nothing from the message.
+    form_data = await request.form()
+    bot_signal = check_bot_signals(form_data, "register", min_seconds=3.0)
+    if bot_signal:
+        logging.info("Blocked bot-like registration from %s (%s)", client_ip(request), bot_signal)
+        return fail(bot_signal, status=403)
+
+    ip = client_ip(request)
+    if count_recent_signups_from_ip(ip, hours=24) >= MAX_SIGNUPS_PER_IP_PER_DAY:
+        logging.warning("Signup quota exceeded for IP %s", ip)
+        return fail("Too many accounts have been created from this network today. Please try again tomorrow.", status=429)
+
+    username_error = validate_username(username)
+    if username_error:
+        return fail(username_error)
+    email_error = validate_email(email)
+    if email_error:
+        return fail(email_error)
     if password != password_confirm:
-        context["error"] = "Passwords do not match"
-        return templates.TemplateResponse("register.html", context, status_code=400)
+        return fail("Passwords do not match")
     if len(password) < 8:
-        context["error"] = "Password must be at least 8 characters"
-        return templates.TemplateResponse("register.html", context, status_code=400)
-    if len(username) < 2:
-        context["error"] = "Username must be at least 2 characters"
-        return templates.TemplateResponse("register.html", context, status_code=400)
+        return fail("Password must be at least 8 characters")
 
     try:
-        user_id, confirm_token = create_user(username, password, email=email)
+        user_id, confirm_token = create_user(username, password, email=email, signup_ip=ip)
     except ValueError as e:
-        context["error"] = str(e)
-        return templates.TemplateResponse("register.html", context, status_code=400)
+        return fail(str(e))
 
     request.session["user_id"] = user_id
 
@@ -859,6 +985,80 @@ async def save_settings(
     return response
 
 
+# ── Admin sign-in (passwordless magic link) ───────────────────────────────────
+
+@app.get("/admin/login", response_class=HTMLResponse)
+async def admin_login_page(request: Request, msg: str = "", error: str = ""):
+    if admin_session_is_authed(request.session):
+        return RedirectResponse(url="/admin", status_code=303)
+    context = await get_template_context(request)
+    context.update({
+        "msg": msg,
+        "error": error,
+        "magic_link_available": magic_link_available(),
+        "admin_email_hint": _mask_email(admin_email()),
+        "token_ttl_minutes": ADMIN_TOKEN_TTL_MINUTES,
+    })
+    return templates.TemplateResponse("admin_login.html", context)
+
+
+@app.post("/admin/login")
+@limiter.limit("5/hour")
+async def admin_login_request(request: Request):
+    """Email a single-use sign-in link to ADMIN_EMAIL. No input, so nothing to enumerate."""
+    if not await verify_csrf_token(request):
+        return RedirectResponse(url="/admin/login?error=Invalid CSRF token", status_code=303)
+    if not magic_link_available():
+        return RedirectResponse(
+            url="/admin/login?error=Magic-link sign-in needs ADMIN_EMAIL and SMTP to be configured",
+            status_code=303,
+        )
+
+    purge_expired_tokens()
+    token = create_login_token(requested_ip=client_ip(request))
+    try:
+        send_login_link(token, str(request.base_url))
+    except Exception:
+        logging.error("Failed to send admin login link", exc_info=True)
+        return RedirectResponse(
+            url="/admin/login?error=Could not send the email. Check the SMTP settings.",
+            status_code=303,
+        )
+
+    logging.info("Admin login link requested from %s", client_ip(request))
+    return RedirectResponse(url="/admin/login?msg=Check your inbox for the sign-in link", status_code=303)
+
+
+@app.get("/admin/auth/{token}", response_class=HTMLResponse)
+async def admin_auth_confirm(request: Request, token: str):
+    """
+    Landing page for the emailed link. Deliberately does not consume the token —
+    mail scanners that prefetch links would otherwise burn it before you click.
+    """
+    context = await get_template_context(request)
+    context.update({"token": token, "valid": token_is_valid(token)})
+    return templates.TemplateResponse("admin_auth.html", context)
+
+
+@app.post("/admin/auth/{token}")
+async def admin_auth_complete(request: Request, token: str):
+    """Spend the token and open an admin session."""
+    if not consume_login_token(token):
+        return RedirectResponse(
+            url="/admin/login?error=That link has expired or was already used. Request a new one.",
+            status_code=303,
+        )
+    mark_admin_session_authed(request.session)
+    logging.info("Admin signed in via magic link from %s", client_ip(request))
+    return RedirectResponse(url="/admin", status_code=303)
+
+
+@app.post("/admin/logout")
+async def admin_logout(request: Request):
+    clear_admin_session(request.session)
+    return RedirectResponse(url="/admin/login?msg=Signed out", status_code=303)
+
+
 # ── Admin ─────────────────────────────────────────────────────────────────────
 
 @app.get("/admin", response_class=HTMLResponse)
@@ -930,6 +1130,8 @@ async def admin_view(
             "error": error,
             "stats": stats,
             "processing_log": processing_log,
+            # Only offer "Sign out" to a magic-link session; Basic Auth has nothing to clear.
+            "admin_session": admin_session_is_authed(request.session),
         },
     )
 
@@ -946,7 +1148,8 @@ async def admin_run_pipeline(
     levels: List[str] = Form([]),
     _: HTTPBasicCredentials = Depends(require_admin),
 ):
-    # No CSRF check — this endpoint is protected by HTTP Basic Auth (used by Bitbucket curl)
+    # No CSRF check — protected by HTTP Basic Auth and called by the supercronic
+    # cron process via curl (see crontab), which has no session to carry a token.
     top_n = max(1, min(top_n, 100))
 
     valid_providers = ["mistral", "deepseek", "claude", "openai", "gemini"]
@@ -1068,8 +1271,12 @@ async def admin_clear_language(
 
 # ── Newsletter ────────────────────────────────────────────────────────────────
 
+# Newsletter signups one IP may create per day.
+MAX_SUBSCRIPTIONS_PER_IP_PER_DAY = int(os.getenv("MAX_SUBSCRIPTIONS_PER_IP_PER_DAY", "3"))
+
+
 @app.post("/subscribe")
-@limiter.limit("5/minute")
+@limiter.limit("15/hour")
 async def subscribe(
     request: Request,
     email: str = Form(...),
@@ -1079,16 +1286,29 @@ async def subscribe(
     if not await verify_csrf_token(request):
         raise HTTPException(status_code=403, detail="Invalid CSRF token")
 
-    email = email.strip().lower()
-    if not email or "@" not in email:
+    # Honeypot + time trap. Bots get the same "subscribed" page as everyone
+    # else so the failure is invisible to them, but nothing is written.
+    form_data = await request.form()
+    ip = client_ip(request)
+    bot_signal = check_bot_signals(form_data, "subscribe", min_seconds=2.0)
+    if bot_signal:
+        logging.info("Blocked bot-like subscription from %s (%s)", ip, bot_signal)
+        return RedirectResponse(url="/?subscribed=1", status_code=303)
+
+    email = normalize_email(email)
+    if validate_email(email):
         return RedirectResponse(url="/?msg=invalid_email", status_code=303)
+
+    if count_recent_subscriptions_from_ip(ip, hours=24) >= MAX_SUBSCRIPTIONS_PER_IP_PER_DAY:
+        logging.warning("Subscription quota exceeded for IP %s", ip)
+        return RedirectResponse(url="/?subscribed=1", status_code=303)
 
     if language not in LEARNING_LANGUAGES:
         language = DEFAULT_TARGET_LANGUAGE
     if level not in CEFR_LEVELS:
         level = None
 
-    token = add_subscriber(email, language, level)
+    token = add_subscriber(email, language, level, signup_ip=ip)
 
     # If SMTP is configured, send confirmation email
     if smtp_configured():
@@ -1141,6 +1361,8 @@ async def unsubscribe_view(request: Request, token: str):
 
 
 @app.post("/admin/send-digest")
+# No CSRF check — Basic Auth only, called by the supercronic cron process.
+# The browser-facing equivalent is /admin/newsletter/send, which does verify CSRF.
 async def admin_send_digest(
     request: Request,
     language: Optional[str] = Form(default=None),
@@ -1157,12 +1379,55 @@ async def admin_send_digest(
 @app.get("/admin/users", response_class=HTMLResponse)
 async def admin_users_view(
     request: Request,
+    msg: str = "",
     _: HTTPBasicCredentials = Depends(require_admin),
 ):
     users = get_all_users()
     context = await get_template_context(request)
     context["users"] = users
+    context["msg"] = msg
+    context["unconfirmed_count"] = sum(1 for u in users if u["email"] and not u["email_confirmed"])
     return templates.TemplateResponse("admin_users.html", context)
+
+
+@app.post("/admin/users/delete/{user_id}")
+async def admin_user_delete(
+    request: Request,
+    user_id: int,
+    _: HTTPBasicCredentials = Depends(require_admin),
+):
+    if not await verify_csrf_token(request):
+        return RedirectResponse(url="/admin/users?msg=Invalid CSRF token", status_code=303)
+    deleted = delete_user(user_id)
+    msg = "User deleted" if deleted else "User not found"
+    return RedirectResponse(url=f"/admin/users?msg={msg}", status_code=303)
+
+
+@app.post("/admin/users/delete-selected")
+async def admin_users_delete_selected(
+    request: Request,
+    user_ids: List[int] = Form(default=[]),
+    _: HTTPBasicCredentials = Depends(require_admin),
+):
+    if not await verify_csrf_token(request):
+        return RedirectResponse(url="/admin/users?msg=Invalid CSRF token", status_code=303)
+    count = delete_users(user_ids)
+    return RedirectResponse(url=f"/admin/users?msg=Deleted {count} users", status_code=303)
+
+
+@app.post("/admin/users/delete-unconfirmed")
+async def admin_users_delete_unconfirmed(
+    request: Request,
+    older_than_days: int = Form(7),
+    _: HTTPBasicCredentials = Depends(require_admin),
+):
+    if not await verify_csrf_token(request):
+        return RedirectResponse(url="/admin/users?msg=Invalid CSRF token", status_code=303)
+    count = delete_unconfirmed_users(max(0, older_than_days))
+    return RedirectResponse(
+        url=f"/admin/users?msg=Deleted {count} unconfirmed accounts older than {older_than_days} days",
+        status_code=303,
+    )
 
 
 @app.get("/admin/newsletter", response_class=HTMLResponse)
@@ -1195,6 +1460,8 @@ async def admin_newsletter_send(
     force: bool = Form(default=False),
     _: HTTPBasicCredentials = Depends(require_admin),
 ):
+    if not await verify_csrf_token(request):
+        return RedirectResponse(url="/admin/newsletter?msg=Invalid CSRF token", status_code=303)
     result = send_weekly_digest(language=language or None, dry_run=dry_run, force=force)
     prefix = "[DRY RUN] " if dry_run else ""
     msg = f"{prefix}Sent {result['sent']}, skipped {result['skipped']}, failed {result['failed']} (total {result['total']})"
@@ -1207,8 +1474,38 @@ async def admin_newsletter_delete(
     subscriber_id: int,
     _: HTTPBasicCredentials = Depends(require_admin),
 ):
-    newsletter_delete_subscriber(subscriber_id)
-    return RedirectResponse(url="/admin/newsletter", status_code=303)
+    if not await verify_csrf_token(request):
+        return RedirectResponse(url="/admin/newsletter?msg=Invalid CSRF token", status_code=303)
+    deleted = newsletter_delete_subscriber(subscriber_id)
+    msg = "Subscriber removed" if deleted else "Subscriber not found"
+    return RedirectResponse(url=f"/admin/newsletter?msg={msg}", status_code=303)
+
+
+@app.post("/admin/newsletter/delete-selected")
+async def admin_newsletter_delete_selected(
+    request: Request,
+    subscriber_ids: List[int] = Form(default=[]),
+    _: HTTPBasicCredentials = Depends(require_admin),
+):
+    if not await verify_csrf_token(request):
+        return RedirectResponse(url="/admin/newsletter?msg=Invalid CSRF token", status_code=303)
+    count = newsletter_delete_subscribers(subscriber_ids)
+    return RedirectResponse(url=f"/admin/newsletter?msg=Removed {count} subscribers", status_code=303)
+
+
+@app.post("/admin/newsletter/delete-unconfirmed")
+async def admin_newsletter_delete_unconfirmed(
+    request: Request,
+    older_than_days: int = Form(7),
+    _: HTTPBasicCredentials = Depends(require_admin),
+):
+    if not await verify_csrf_token(request):
+        return RedirectResponse(url="/admin/newsletter?msg=Invalid CSRF token", status_code=303)
+    count = delete_unconfirmed_subscribers(max(0, older_than_days))
+    return RedirectResponse(
+        url=f"/admin/newsletter?msg=Removed {count} unconfirmed signups older than {older_than_days} days",
+        status_code=303,
+    )
 
 
 # ── API endpoints (JSON, for Alpine.js) ───────────────────────────────────────

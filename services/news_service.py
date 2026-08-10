@@ -101,7 +101,12 @@ def _verify_password(password: str, stored_hash: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def create_user(username: str, password: str, email: Optional[str] = None) -> Tuple[int, Optional[str]]:
+def create_user(
+    username: str,
+    password: str,
+    email: Optional[str] = None,
+    signup_ip: Optional[str] = None,
+) -> Tuple[int, Optional[str]]:
     """Create a new user. Returns (user_id, confirm_token). Raises ValueError if username or email taken."""
     with db_connect() as db:
         if db.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone():
@@ -111,11 +116,24 @@ def create_user(username: str, password: str, email: Optional[str] = None) -> Tu
         password_hash = _hash_password(password)
         confirm_token = secrets.token_urlsafe(32) if email else None
         cursor = db.execute(
-            "INSERT INTO users (username, email, password_hash, confirm_token, created_at) VALUES (?, ?, ?, ?, ?)",
-            (username, email or None, password_hash, confirm_token, now_iso()),
+            "INSERT INTO users (username, email, password_hash, confirm_token, created_at, signup_ip) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (username, email or None, password_hash, confirm_token, now_iso(), signup_ip),
         )
         db.commit()
         return cursor.lastrowid, confirm_token
+
+
+def count_recent_signups_from_ip(signup_ip: str, hours: int = 24) -> int:
+    """How many accounts this IP has created in the last `hours`. Backs the per-IP signup quota."""
+    if not signup_ip:
+        return 0
+    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    with db_connect() as db:
+        return db.execute(
+            "SELECT COUNT(*) FROM users WHERE signup_ip = ? AND created_at >= ?",
+            (signup_ip, since),
+        ).fetchone()[0]
 
 
 def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
@@ -200,12 +218,64 @@ def reset_user_password(token: str, new_password: str) -> bool:
     return True
 
 def get_all_users() -> List[Dict[str, Any]]:
-    """Return all users ordered by created_at desc."""
+    """Return all users ordered by created_at desc, with per-user activity counts."""
     with db_connect() as db:
         rows = db.execute(
-            "SELECT id, username, email, email_confirmed, language, level, created_at FROM users ORDER BY created_at DESC"
+            """
+            SELECT u.id, u.username, u.email, u.email_confirmed, u.language, u.level,
+                   u.created_at, u.signup_ip,
+                   (SELECT COUNT(*) FROM user_article_reads r WHERE r.user_id = u.id) AS reads,
+                   (SELECT COUNT(*) FROM user_vocab_state v WHERE v.user_id = u.id) AS saved_words
+            FROM users u
+            ORDER BY u.created_at DESC
+            """
+        ).fetchall()
+        users = [dict(r) for r in rows]
+
+    # Flag accounts that share a signup IP — the clearest bot-registration tell.
+    ip_counts: Dict[str, int] = {}
+    for u in users:
+        if u.get("signup_ip"):
+            ip_counts[u["signup_ip"]] = ip_counts.get(u["signup_ip"], 0) + 1
+    for u in users:
+        u["shared_ip_count"] = ip_counts.get(u.get("signup_ip") or "", 0)
+        u["is_inactive"] = not u["reads"] and not u["saved_words"]
+
+    return users
+
+
+def delete_user(user_id: int) -> bool:
+    """Delete a user and everything hanging off them. Returns True if the user existed."""
+    with db_connect() as db:
+        db.execute("DELETE FROM user_article_reads WHERE user_id = ?", (user_id,))
+        db.execute("DELETE FROM user_vocab_state WHERE user_id = ?", (user_id,))
+        cur = db.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        db.commit()
+        return cur.rowcount > 0
+
+
+def delete_users(user_ids: List[int]) -> int:
+    """Delete several users at once. Returns the number actually removed."""
+    return sum(1 for uid in user_ids if delete_user(uid))
+
+
+def get_unconfirmed_users(older_than_days: int = 7) -> List[Dict[str, Any]]:
+    """Users with an unconfirmed email address older than `older_than_days`."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=older_than_days)).isoformat()
+    with db_connect() as db:
+        rows = db.execute(
+            "SELECT id, username, email, created_at FROM users "
+            "WHERE email_confirmed = 0 AND email IS NOT NULL AND created_at < ? "
+            "ORDER BY created_at",
+            (cutoff,),
         ).fetchall()
         return [dict(r) for r in rows]
+
+
+def delete_unconfirmed_users(older_than_days: int = 7) -> int:
+    """Purge accounts that never confirmed their email. Returns the count deleted."""
+    stale = get_unconfirmed_users(older_than_days)
+    return delete_users([u["id"] for u in stale])
 
 
 def get_user_settings(user_id: int) -> Dict[str, Any]:
@@ -919,6 +989,15 @@ def init_db() -> None:
                 created_at       TEXT NOT NULL DEFAULT (datetime('now'))
             );
 
+            CREATE TABLE IF NOT EXISTS admin_login_tokens (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                token_hash   TEXT NOT NULL UNIQUE,
+                created_at   TEXT NOT NULL,
+                expires_at   TEXT NOT NULL,
+                used_at      TEXT,
+                requested_ip TEXT
+            );
+
             CREATE TABLE IF NOT EXISTS digest_log (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
                 sent_at    TEXT NOT NULL DEFAULT (datetime('now')),
@@ -962,6 +1041,10 @@ def init_db() -> None:
         ensure_column(db, "users", "confirm_token TEXT")
         ensure_column(db, "users", "reset_token TEXT")
         ensure_column(db, "users", "reset_token_expires TEXT")
+        ensure_column(db, "users", "signup_ip TEXT")
+        ensure_column(db, "newsletter_subscribers", "signup_ip TEXT")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_users_signup_ip ON users(signup_ip)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_subscribers_signup_ip ON newsletter_subscribers(signup_ip)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_articles_source_name ON articles(source_name)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_articles_published_created ON articles(published, created_at)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_articles_is_read ON articles(is_read)")

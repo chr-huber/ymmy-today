@@ -28,6 +28,12 @@
 
       <form method="post" action="/register" class="space-y-4">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="{{ form_token_field }}" value="{{ register_form_token }}">
+        <!-- Anti-bot honeypot: hidden from users, irresistible to scripts. -->
+        <div aria-hidden="true" style="position:absolute;left:-9999px;top:-9999px;height:0;width:0;overflow:hidden">
+          <label for="reg-website">Website</label>
+          <input type="text" id="reg-website" name="{{ honeypot_field }}" tabindex="-1" autocomplete="off">
+        </div>
         <div>
           <label for="username" class="block text-xs font-semibold text-stone-400 dark:text-stone-500 uppercase tracking-wide mb-1">Username</label>
           <input type="text" id="username" name="username" required autofocus

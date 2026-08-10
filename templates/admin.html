@@ -15,6 +15,11 @@
     {{ processed_count }} processed · {{ total }} total
     {% if not has_api_key %} · <span class="text-amber-500">no API key</span>{% endif %}
   </span>
+  {% if admin_session %}
+  <form method="post" action="/admin/logout">
+    <button type="submit" class="text-xs text-stone-400 hover:text-stone-600 dark:hover:text-stone-300 underline">Sign out</button>
+  </form>
+  {% endif %}
 </div>
 
 {% if msg %}

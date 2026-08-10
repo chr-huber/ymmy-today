@@ -21,7 +21,12 @@ APP_BASE_URL = os.getenv("APP_BASE_URL", "https://ymmy.fly.dev")
 
 # ── Subscriber management ─────────────────────────────────────────────────────
 
-def add_subscriber(email: str, language: str, level: Optional[str]) -> str:
+def add_subscriber(
+    email: str,
+    language: str,
+    level: Optional[str],
+    signup_ip: Optional[str] = None,
+) -> str:
     """
     Insert or update a subscriber row and return a confirmation token.
     If the email already exists and is unconfirmed, refreshes the token.
@@ -57,12 +62,24 @@ def add_subscriber(email: str, language: str, level: Optional[str]) -> str:
         unsubscribe_token = secrets.token_urlsafe(32)
         db.execute(
             """INSERT INTO newsletter_subscribers
-               (email, language, level, confirmed, confirm_token, unsubscribe_token, created_at)
-               VALUES (?, ?, ?, 0, ?, ?, datetime('now'))""",
-            (email, language, level, confirm_token, unsubscribe_token),
+               (email, language, level, confirmed, confirm_token, unsubscribe_token, created_at, signup_ip)
+               VALUES (?, ?, ?, 0, ?, ?, datetime('now'), ?)""",
+            (email, language, level, confirm_token, unsubscribe_token, signup_ip),
         )
         db.commit()
     return confirm_token
+
+
+def count_recent_subscriptions_from_ip(signup_ip: str, hours: int = 24) -> int:
+    """How many subscriptions this IP has created in the last `hours`."""
+    if not signup_ip:
+        return 0
+    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
+    with db_connect() as db:
+        return db.execute(
+            "SELECT COUNT(*) FROM newsletter_subscribers WHERE signup_ip = ? AND created_at >= ?",
+            (signup_ip, since),
+        ).fetchone()[0]
 
 
 def confirm_subscriber(token: str) -> bool:
@@ -104,9 +121,20 @@ def get_confirmed_subscribers() -> list:
 def get_all_subscribers() -> list:
     with db_connect() as db:
         rows = db.execute(
-            "SELECT id, email, language, level, confirmed, created_at FROM newsletter_subscribers ORDER BY created_at DESC"
+            "SELECT id, email, language, level, confirmed, created_at, signup_ip "
+            "FROM newsletter_subscribers ORDER BY created_at DESC"
         ).fetchall()
-    return [dict(r) for r in rows]
+    subscribers = [dict(r) for r in rows]
+
+    # Flag addresses that share a signup IP — the clearest bot-signup tell.
+    ip_counts: dict = {}
+    for s in subscribers:
+        if s.get("signup_ip"):
+            ip_counts[s["signup_ip"]] = ip_counts.get(s["signup_ip"], 0) + 1
+    for s in subscribers:
+        s["shared_ip_count"] = ip_counts.get(s.get("signup_ip") or "", 0)
+
+    return subscribers
 
 
 def delete_subscriber(subscriber_id: int) -> bool:
@@ -114,6 +142,32 @@ def delete_subscriber(subscriber_id: int) -> bool:
         cur = db.execute("DELETE FROM newsletter_subscribers WHERE id = ?", (subscriber_id,))
         db.commit()
     return cur.rowcount > 0
+
+
+def delete_subscribers(subscriber_ids: list) -> int:
+    """Delete several subscribers at once. Returns the number actually removed."""
+    if not subscriber_ids:
+        return 0
+    placeholders = ",".join("?" * len(subscriber_ids))
+    with db_connect() as db:
+        cur = db.execute(
+            f"DELETE FROM newsletter_subscribers WHERE id IN ({placeholders})",
+            list(subscriber_ids),
+        )
+        db.commit()
+    return cur.rowcount
+
+
+def delete_unconfirmed_subscribers(older_than_days: int = 7) -> int:
+    """Purge signups that never clicked the confirmation link. Returns the count deleted."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=older_than_days)).strftime("%Y-%m-%d %H:%M:%S")
+    with db_connect() as db:
+        cur = db.execute(
+            "DELETE FROM newsletter_subscribers WHERE confirmed = 0 AND created_at < ?",
+            (cutoff,),
+        )
+        db.commit()
+    return cur.rowcount
 
 
 def subscriber_count() -> int:
