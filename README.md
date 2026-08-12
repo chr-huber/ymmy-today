@@ -38,8 +38,8 @@ Build CSS (requires [Tailwind CLI](https://github.com/tailwindlabs/tailwindcss/r
 ## Environment variables
 
 ```env
-LLM_PROVIDER=mistral              # mistral | deepseek | claude | openai
-REVIEW_LLM_PROVIDER=claude
+LLM_PROVIDER=mistral              # mistral | deepseek | claude | openai | gemini | qwen
+REVIEW_LLM_PROVIDER=qwen         # second-pass reviewer
 
 MISTRAL_API_KEY=...
 MISTRAL_MODEL=mistral-small-latest
@@ -52,6 +52,12 @@ DEEPSEEK_MODEL=deepseek-chat
 
 OPENAI_API_KEY=...
 OPENAI_MODEL=gpt-4o-mini
+
+GEMINI_API_KEY=...
+GEMINI_MODEL=gemini-2.5-pro
+
+QWEN_API_KEY=...                 # or DASHSCOPE_API_KEY; QwenCloud, OpenAI-compatible
+QWEN_MODEL=qwen3.7-plus          # qwen3.8-max | qwen3.7-plus | qwen3.7-flash
 
 DATABASE_PATH=ymmy.db
 

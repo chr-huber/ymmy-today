@@ -21,14 +21,42 @@ load_dotenv()
 
 DB_PATH = os.getenv("DATABASE_PATH", "news.db")
 
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "mistral")  # "mistral", "deepseek", "claude", "openai", or "gemini"
-REVIEW_LLM_PROVIDER = os.getenv("REVIEW_LLM_PROVIDER", "claude")  # second-pass reviewer, defaults to claude
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "mistral")  # "mistral", "deepseek", "claude", "openai", "gemini", or "qwen"
+REVIEW_LLM_PROVIDER = os.getenv("REVIEW_LLM_PROVIDER", "qwen")  # second-pass reviewer, defaults to qwen
 MISTRAL_MODEL = os.getenv("MISTRAL_MODEL", "mistral-small-latest")
 REVIEW_MISTRAL_MODEL = os.getenv("REVIEW_MISTRAL_MODEL", MISTRAL_MODEL)
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
+# Qwen (Alibaba QwenCloud / DashScope) — OpenAI-compatible endpoint.
+QWEN_MODEL = os.getenv("QWEN_MODEL", "qwen3.7-plus")
+QWEN_API_URL = os.getenv(
+    "QWEN_API_URL",
+    "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
+)
+
+# Env var(s) holding the API key for each provider; first one set wins.
+PROVIDER_API_KEYS = {
+    "mistral": ("MISTRAL_API_KEY",),
+    "deepseek": ("DEEPSEEK_API_KEY",),
+    "claude": ("ANTHROPIC_API_KEY",),
+    "openai": ("OPENAI_API_KEY",),
+    "gemini": ("GEMINI_API_KEY",),
+    "qwen": ("QWEN_API_KEY", "DASHSCOPE_API_KEY"),
+}
+LLM_PROVIDERS = list(PROVIDER_API_KEYS)
+
+
+def get_provider_api_key(provider: str) -> Optional[str]:
+    """Return the configured API key for a provider, or None if unset."""
+    for env_name in PROVIDER_API_KEYS.get(provider, ()):
+        key = os.getenv(env_name)
+        if key:
+            return key
+    return None
+
+
 DEFAULT_TARGET_LANGUAGE = os.getenv("DEFAULT_TARGET_LANGUAGE", "Finnish")
 DEFAULT_TARGET_LEVEL = os.getenv("DEFAULT_TARGET_LEVEL", "A2")
 LEARNING_LANGUAGES = ["Finnish", "German"]
@@ -1370,7 +1398,7 @@ def simple_fallback_transform(text: str, target_language: str, target_level: str
 
 
 def _call_llm_api(provider: str, prompt: str, system_prompt: str, is_review: bool = False) -> Dict[str, Any]:
-    """Call LLM API (Mistral, DeepSeek, Claude, or OpenAI) with given prompts.
+    """Call LLM API (Mistral, DeepSeek, Claude, OpenAI, Gemini, or Qwen) with given prompts.
     
     Returns {'content': str, 'tokens': int} on success, or {'error': str} on failure.
     """
@@ -1409,6 +1437,13 @@ def _call_llm_api(provider: str, prompt: str, system_prompt: str, is_review: boo
         api_url = f"https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
         model = GEMINI_MODEL
         use_anthropic = False
+    elif provider == "qwen":
+        api_key = get_provider_api_key("qwen")
+        if not api_key:
+            return {"error": "No QWEN_API_KEY (or DASHSCOPE_API_KEY) set"}
+        api_url = QWEN_API_URL
+        model = QWEN_MODEL
+        use_anthropic = False
     else:
         return {"error": f"Unknown LLM provider: {provider}"}
 
@@ -1433,7 +1468,7 @@ def _call_llm_api(provider: str, prompt: str, system_prompt: str, is_review: boo
                 timeout=120,
             )
         else:
-            # OpenAI-compatible format (Mistral, DeepSeek, OpenAI)
+            # OpenAI-compatible format (Mistral, DeepSeek, OpenAI, Gemini, Qwen)
             request_body = {
                 "model": model,
                 "messages": [
@@ -1441,8 +1476,8 @@ def _call_llm_api(provider: str, prompt: str, system_prompt: str, is_review: boo
                     {"role": "user", "content": prompt},
                 ],
             }
-            # Only set temperature for Mistral/DeepSeek; OpenAI doesn't support it
-            if provider in ["mistral", "deepseek"]:
+            # Only set temperature for Mistral/DeepSeek/Qwen; OpenAI doesn't support it
+            if provider in ["mistral", "deepseek", "qwen"]:
                 request_body["temperature"] = 0.2
             
             response = requests.post(
@@ -1490,14 +1525,7 @@ def generate_learning_content(
         review_provider = REVIEW_LLM_PROVIDER
 
     # Check we have a key for the active provider
-    key_map = {
-        "mistral": "MISTRAL_API_KEY",
-        "deepseek": "DEEPSEEK_API_KEY",
-        "claude": "ANTHROPIC_API_KEY",
-        "openai": "OPENAI_API_KEY",
-        "gemini": "GEMINI_API_KEY",
-    }
-    if not os.getenv(key_map.get(provider, "")):
+    if not get_provider_api_key(provider):
         return simple_fallback_transform(f"{title}\n\n{article_text}", target_language, target_level)
 
     # Check cache
@@ -1649,7 +1677,8 @@ English translations (0-indexed):
 {json.dumps(list(enumerate(step1_english)), ensure_ascii=False)}
 
 Return JSON only. For corrections, include ONLY sentences that need changes — omit correct sentences entirely. If nothing needs fixing, return an empty array.
-Also extract 6 key vocabulary words and add 2-3 grammar notes. Each grammar note must be a full explanation (2-4 sentences) covering what the structure is, why it is used here, and how a learner can apply it generally. Choose the most pedagogically interesting structures — prefer noteworthy grammar over obvious ones.
+Also extract 6 key vocabulary words and add 4-6 grammar notes. Each grammar note must be a full explanation (2-4 sentences) covering what the structure is, why it is used here, and how you can apply it generally. Choose the most pedagogically interesting structures — prefer noteworthy grammar over obvious ones.
+Write grammar explanations in direct, personal language. Address the reader as "you". Never open with "In {target_language}, ..." and never write about learners in the third person ("learners should", "students can", "the learner"). Start with the structure itself, e.g. "Käyttää takes a partitive object, so ..." or "Use the imperfect when ...".
 
 confirmed_level: assess what CEFR level this text actually reads as AFTER your corrections. \
 Base this on sentence length, grammar structures used, and vocabulary complexity. \
@@ -1744,11 +1773,8 @@ def generate_learning_content_all_levels(
     if review_provider is None:
         review_provider = REVIEW_LLM_PROVIDER
 
-    # Check if we have API keys
-    has_mistral = bool(os.getenv("MISTRAL_API_KEY"))
-    has_deepseek = bool(os.getenv("DEEPSEEK_API_KEY"))
-    
-    if not has_mistral and not has_deepseek:
+    # Check we have a key for the active provider
+    if not get_provider_api_key(provider):
         return {
             lvl: simple_fallback_transform(f"{title}\n\n{article_text}", target_language, lvl)
             for lvl in levels
@@ -1944,7 +1970,8 @@ For EACH level return:
 - confirmed_level: assess what CEFR level this text actually reads as AFTER your corrections. Base this on sentence length, grammar structures used, and vocabulary complexity. If the corrected text clearly reads as a different level than intended, report that level instead (must be one of: {levels_str}). Otherwise confirm the intended level.
 - corrections: ONLY sentences that need changes (omit correct sentences — empty array if all OK)
 - keywords: 6 key vocabulary words from the (corrected) {target_language} sentences. Prioritize verbs, case-inflected nouns, news-context words. Include base_form, translation, used_form, used_form_translation, grammatical_form.
-- grammar_notes: 2-3 pedagogical notes for language learners — highlight interesting grammar structures in the text (e.g. a case usage, verb form, sentence pattern). Each explanation must be 2-4 sentences: describe the structure, explain why it is used here, and show how a learner can apply it generally. Do NOT describe corrections you made. Explanations in English. Grammar notes must only explain structures appropriate to that level — do not explain A2/B1 structures in an A1 text.
+- grammar_notes: 4-6 pedagogical notes — highlight interesting grammar structures in the text (e.g. a case usage, verb form, sentence pattern). Each explanation must be 2-4 sentences: describe the structure, explain why it is used here, and show how you can apply it generally. Do NOT describe corrections you made. Explanations in English. Grammar notes must only explain structures appropriate to that level — do not explain A2/B1 structures in an A1 text.
+  Write them in direct, personal language. Address the reader as "you". Never open with "In {target_language}, ..." and never write about learners in the third person ("learners should", "students can", "the learner"). Start with the structure itself, e.g. "Käyttää takes a partitive object, so ..." or "Use the imperfect when ...".
 
 Return JSON only:
 {{

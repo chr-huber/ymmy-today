@@ -103,6 +103,7 @@ from services.news_service import (
     GEMINI_MODEL,
     LEARNING_LANGUAGES,
     LLM_PROVIDER,
+    LLM_PROVIDERS,
     MISTRAL_MODEL,
     OPENAI_MODEL,
     REVIEW_LLM_PROVIDER,
@@ -130,6 +131,7 @@ from services.news_service import (
     get_pipeline_events,
     get_processing_log,
     get_processing_stats,
+    get_provider_api_key,
     get_admin_articles_page,
     get_saved_words,
     get_saved_words_for_user,
@@ -175,9 +177,19 @@ if _session_secret == "change-me-in-production":
     logging.warning("SESSION_SECRET_KEY is not set — using insecure default. Set this env var in production!")
 
 _admin_password = os.getenv("ADMIN_PASSWORD", "")
-if os.getenv("FLY_APP_NAME") and (not _admin_password or _admin_password in {"admin", "test", "changeme"}):
+_WEAK_ADMIN_PASSWORDS = {"admin", "test", "changeme", "password"}
+if os.getenv("FLY_APP_NAME") and (not _admin_password or _admin_password in _WEAK_ADMIN_PASSWORDS):
     import sys
-    logging.critical("ADMIN_PASSWORD is unset or left at a default value in production. Refusing to start.")
+    _why = "is not set" if not _admin_password else "is set to a well-known default"
+    logging.critical(
+        "ADMIN_PASSWORD %s. Refusing to start - booting would leave the admin panel "
+        "reachable with a guessable password, including /admin/clear. Fix with:\n"
+        "  fly secrets set ADMIN_PASSWORD='<32 random chars>'\n"
+        "Generate one with: python -c \"import secrets,string; "
+        "print(''.join(secrets.choice(string.ascii_letters+string.digits) for _ in range(32)))\"\n"
+        "The cron process reads the same secret, so scheduled jobs pick it up automatically.",
+        _why,
+    )
     sys.exit(1)
 
 # Behind the Fly proxy every request appears to come from the proxy, which would
@@ -1016,8 +1028,11 @@ async def admin_login_request(request: Request):
 
     purge_expired_tokens()
     token = create_login_token(requested_ip=client_ip(request))
+    # APP_BASE_URL, not request.base_url: uvicorn only trusts forwarded headers from
+    # loopback, so behind the Fly proxy request.base_url can come out as http://.
+    base_url = os.getenv("APP_BASE_URL") or str(request.base_url)
     try:
-        send_login_link(token, str(request.base_url))
+        send_login_link(token, base_url)
     except Exception:
         logging.error("Failed to send admin login link", exc_info=True)
         return RedirectResponse(
@@ -1125,7 +1140,7 @@ async def admin_view(
             "review_llm_provider": REVIEW_LLM_PROVIDER,
             "mistral_model": MISTRAL_MODEL,
             "trusted_sources": TRUSTED_SOURCES,
-            "has_api_key": bool(os.getenv("MISTRAL_API_KEY")) or bool(os.getenv("DEEPSEEK_API_KEY")),
+            "has_api_key": any(get_provider_api_key(p) for p in LLM_PROVIDERS),
             "msg": msg,
             "error": error,
             "stats": stats,
@@ -1152,7 +1167,7 @@ async def admin_run_pipeline(
     # cron process via curl (see crontab), which has no session to carry a token.
     top_n = max(1, min(top_n, 100))
 
-    valid_providers = ["mistral", "deepseek", "claude", "openai", "gemini"]
+    valid_providers = LLM_PROVIDERS
     if provider not in valid_providers:
         provider = LLM_PROVIDER
     if review_provider not in valid_providers:

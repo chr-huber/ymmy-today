@@ -51,6 +51,7 @@
           <option value="claude"   {% if llm_provider == "claude"   %}selected{% endif %}>Claude</option>
           <option value="openai"   {% if llm_provider == "openai"   %}selected{% endif %}>OpenAI</option>
           <option value="gemini"   {% if llm_provider == "gemini"   %}selected{% endif %}>Gemini</option>
+          <option value="qwen"     {% if llm_provider == "qwen"     %}selected{% endif %}>Qwen</option>
         </select>
       </div>
       <div>
@@ -61,6 +62,7 @@
           <option value="deepseek" {% if review_llm_provider == "deepseek" %}selected{% endif %}>DeepSeek</option>
           <option value="openai"   {% if review_llm_provider == "openai"   %}selected{% endif %}>OpenAI</option>
           <option value="gemini"   {% if review_llm_provider == "gemini"   %}selected{% endif %}>Gemini</option>
+          <option value="qwen"     {% if review_llm_provider == "qwen"     %}selected{% endif %}>Qwen</option>
         </select>
       </div>
     </div>
