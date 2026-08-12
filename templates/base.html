@@ -45,7 +45,8 @@
         </a>
         {% endif %}
 
-        <!-- Subscribe button -->
+        <!-- Subscribe button (hidden when the digest is switched off in /admin) -->
+        {% if newsletter_enabled %}
         <button @click="subscribeOpen = true"
                 class="flex items-center gap-1.5 text-stone-400 hover:text-stone-600 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-lg px-2 h-8 transition-colors"
                 :class="subscribeOpen ? 'bg-stone-100 dark:bg-stone-800 text-stone-600' : ''"
@@ -55,6 +56,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
           </svg>
         </button>
+        {% endif %}
 
         <!-- Subtle menu -->
         <div class="relative" x-data="{ open: false }">
@@ -107,9 +109,11 @@
               <a href="/login" class="block text-sm text-stone-600 dark:text-stone-300 hover:text-stone-800 dark:hover:text-stone-100 py-1 transition-colors">
                 Sign in
               </a>
+              {% if signup_enabled %}
               <a href="/register" class="block text-sm text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 py-1 transition-colors">
                 Sign up
               </a>
+              {% endif %}
               {% endif %}
             </div>
 
@@ -148,6 +152,7 @@
   </header>
 
   <!-- Subscribe modal (outside header so fixed positioning works) -->
+  {% if newsletter_enabled %}
   <div x-show="subscribeOpen" x-cloak
        class="fixed inset-0 z-50 flex items-center justify-center p-4"
        @keydown.escape.window="subscribeOpen = false">
@@ -184,6 +189,7 @@
       {% endif %}
     </div>
   </div>
+  {% endif %}
 
   <main class="max-w-3xl mx-auto px-4 py-6">
     {% block content %}{% endblock %}

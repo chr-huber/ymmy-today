@@ -110,6 +110,34 @@
   </form>
 </div>
 
+<!-- Public features -->
+<div class="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 p-5 mb-4">
+  <div class="flex items-center justify-between mb-1">
+    <h2 class="font-serif font-semibold">Public features</h2>
+    <span class="text-xs text-stone-400 dark:text-stone-500">Applies to every visitor</span>
+  </div>
+  <p class="text-xs text-stone-400 dark:text-stone-500 mb-4">
+    Turning one off hides its button and refuses the endpoint, so bookmarked forms stop working too.
+  </p>
+  <form method="post" action="/admin/settings" class="flex items-center gap-6 flex-wrap">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="flex items-center gap-2 cursor-pointer">
+      <input type="checkbox" name="newsletter_enabled" value="true" {% if newsletter_enabled %}checked{% endif %}
+             class="w-4 h-4 rounded border-stone-300 text-finnish-600 focus:ring-finnish-400 focus:ring-2">
+      <span class="text-sm text-stone-700 dark:text-stone-300">Weekly digest button</span>
+    </label>
+    <label class="flex items-center gap-2 cursor-pointer">
+      <input type="checkbox" name="signup_enabled" value="true" {% if signup_enabled %}checked{% endif %}
+             class="w-4 h-4 rounded border-stone-300 text-finnish-600 focus:ring-finnish-400 focus:ring-2">
+      <span class="text-sm text-stone-700 dark:text-stone-300">Sign up button</span>
+    </label>
+    <button type="submit"
+            class="bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 rounded-lg px-4 py-1.5 text-sm font-medium transition-colors">
+      Save
+    </button>
+  </form>
+</div>
+
 <!-- Processing Log -->
 {% if processing_log %}
 <div class="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 overflow-hidden mb-4">

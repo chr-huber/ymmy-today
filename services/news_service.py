@@ -1026,6 +1026,12 @@ def init_db() -> None:
                 requested_ip TEXT
             );
 
+            CREATE TABLE IF NOT EXISTS app_settings (
+                key        TEXT PRIMARY KEY,
+                value      TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS digest_log (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
                 sent_at    TEXT NOT NULL DEFAULT (datetime('now')),
@@ -1159,6 +1165,49 @@ def clear_language_data(target_language: str) -> Dict[str, int]:
         db.commit()
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Feature flags (admin-togglable, stored in app_settings)
+# ---------------------------------------------------------------------------
+
+# Both default to on, so an empty app_settings table behaves like before the
+# toggles existed.
+FEATURE_FLAG_DEFAULTS: Dict[str, bool] = {
+    "newsletter_enabled": True,
+    "signup_enabled": True,
+}
+
+
+def get_feature_flags() -> Dict[str, bool]:
+    """Current public-feature switches, falling back to the defaults above."""
+    flags = dict(FEATURE_FLAG_DEFAULTS)
+    try:
+        with db_connect() as db:
+            rows = db.execute(
+                "SELECT key, value FROM app_settings WHERE key IN (%s)"
+                % ",".join("?" for _ in FEATURE_FLAG_DEFAULTS),
+                list(FEATURE_FLAG_DEFAULTS),
+            ).fetchall()
+    except sqlite3.OperationalError:
+        # Table not created yet (init_db has not run) — treat as all-on.
+        return flags
+    for row in rows:
+        flags[row["key"]] = row["value"] == "1"
+    return flags
+
+
+def set_feature_flag(key: str, enabled: bool) -> None:
+    """Turn a public feature on or off. Unknown keys are ignored."""
+    if key not in FEATURE_FLAG_DEFAULTS:
+        return
+    with db_connect() as db:
+        db.execute(
+            "INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+            (key, "1" if enabled else "0", now_iso()),
+        )
+        db.commit()
 
 
 def ingest_from_rss(per_source: int = DEFAULT_AUTO_PER_SOURCE, run_id: Optional[str] = None) -> Dict[str, Any]:

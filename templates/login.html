@@ -49,7 +49,7 @@
     </div>
 
     <p class="text-center mt-4 text-xs text-stone-400 dark:text-stone-500">
-      No account? <a href="/register" class="hover:text-stone-600 dark:hover:text-stone-300 transition-colors">Create one →</a>
+      {% if signup_enabled %}No account? <a href="/register" class="hover:text-stone-600 dark:hover:text-stone-300 transition-colors">Create one →</a>{% endif %}
     </p>
     <p class="text-center mt-2 text-xs text-stone-400 dark:text-stone-500">
       <a href="/" class="hover:text-stone-600 dark:hover:text-stone-300 transition-colors">Continue without signing in →</a>

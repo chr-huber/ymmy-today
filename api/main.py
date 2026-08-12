@@ -128,6 +128,7 @@ from services.news_service import (
     get_all_saved_words_for_user,
     get_due_count_for_user,
     get_latest_processed_at,
+    get_feature_flags,
     get_pipeline_events,
     get_processing_log,
     get_processing_stats,
@@ -153,6 +154,7 @@ from services.news_service import (
     cleanup_old_unprocessed_articles,
     save_auto_pick_run,
     save_user_settings,
+    set_feature_flag,
     split_sentences,
     to_int,
     toggle_save_word,
@@ -303,9 +305,14 @@ async def verify_csrf_token(request: Request) -> bool:
 
 async def get_template_context(request: Request) -> Dict[str, Any]:
     """Get common template context including CSRF and anti-bot form tokens."""
+    # Feature flags go in the shared context because base.html decides whether to
+    # render the subscribe and sign-up entry points at all.
+    flags = get_feature_flags()
     return {
         "request": request,
         "csrf_token": await generate_csrf_token(request),
+        "newsletter_enabled": flags["newsletter_enabled"],
+        "signup_enabled": flags["signup_enabled"],
         # Signed render timestamps for the public forms — see services/antibot.py.
         "subscribe_form_token": form_token("subscribe"),
         "register_form_token": form_token("register"),
@@ -461,6 +468,8 @@ async def logout(request: Request):
 async def register_page(request: Request):
     if get_optional_user(request):
         return RedirectResponse(url="/", status_code=303)
+    if not get_feature_flags()["signup_enabled"]:
+        return RedirectResponse(url="/?msg=signup_closed", status_code=303)
     context = await get_template_context(request)
     return templates.TemplateResponse("register.html", context)
 
@@ -480,6 +489,11 @@ async def register_submit(
     password: str = Form(...),
     password_confirm: str = Form(...),
 ):
+    # Hiding the button is not enough — the endpoint has to refuse too, or a
+    # bookmarked form still creates accounts after signup is switched off.
+    if not get_feature_flags()["signup_enabled"]:
+        return RedirectResponse(url="/?msg=signup_closed", status_code=303)
+
     if not await verify_csrf_token(request):
         context = await get_template_context(request)
         context["error"] = "Invalid CSRF token"
@@ -1205,6 +1219,31 @@ async def admin_run_pipeline(
     return RedirectResponse(url=f"/admin?msg={msg}", status_code=303)
 
 
+@app.post("/admin/settings")
+async def admin_update_settings(
+    request: Request,
+    newsletter_enabled: bool = Form(default=False),
+    signup_enabled: bool = Form(default=False),
+    _: HTTPBasicCredentials = Depends(require_admin),
+):
+    """Toggle the public subscribe and sign-up entry points.
+
+    Unchecked checkboxes are simply absent from the POST body, so both fields
+    default to False and the form always submits the complete desired state.
+    """
+    if not await verify_csrf_token(request):
+        return RedirectResponse(url="/admin?error=Invalid CSRF token", status_code=303)
+
+    set_feature_flag("newsletter_enabled", newsletter_enabled)
+    set_feature_flag("signup_enabled", signup_enabled)
+
+    msg = (
+        f"Public features updated — weekly digest {'on' if newsletter_enabled else 'off'}, "
+        f"sign up {'on' if signup_enabled else 'off'}"
+    )
+    return RedirectResponse(url=f"/admin?msg={msg}", status_code=303)
+
+
 @app.post("/admin/archive-old")
 async def admin_archive_old(
     older_than_days: int = Form(7),
@@ -1298,6 +1337,9 @@ async def subscribe(
     language: str = Form(DEFAULT_TARGET_LANGUAGE),
     level: Optional[str] = Form(default=None),
 ):
+    if not get_feature_flags()["newsletter_enabled"]:
+        return RedirectResponse(url="/?msg=newsletter_closed", status_code=303)
+
     if not await verify_csrf_token(request):
         raise HTTPException(status_code=403, detail="Invalid CSRF token")
 
@@ -1384,6 +1426,11 @@ async def admin_send_digest(
     dry_run: bool = Form(default=False),
     _: HTTPBasicCredentials = Depends(require_admin),
 ):
+    # The Sunday cron hits this endpoint. If the newsletter is switched off in
+    # the admin panel, it must not quietly keep mailing people.
+    if not get_feature_flags()["newsletter_enabled"]:
+        return RedirectResponse(url="/admin?msg=Newsletter is disabled — digest not sent", status_code=303)
+
     result = send_weekly_digest(language=language or None, dry_run=dry_run)
     msg = f"Digest: sent={result['sent']} skipped={result['skipped']} failed={result['failed']} (total={result['total']})"
     if dry_run:
