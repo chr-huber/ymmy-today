@@ -71,7 +71,75 @@ SESSION_SECRET_KEY=...           # required in production
 MAX_SIGNUPS_PER_IP_PER_DAY=3
 MAX_SUBSCRIPTIONS_PER_IP_PER_DAY=3
 BLOCKED_EMAIL_DOMAINS=           # extra domains to reject, comma-separated
+
+TTS_PROVIDER=none                # gemini | none
+GEMINI_TTS_MODEL=gemini-2.5-flash-preview-tts   # reuses GEMINI_API_KEY
+GEMINI_VOICE_FINNISH=Kore
+TTS_AUDIO_FORMAT=mp3             # mp3 | opus
+TTS_CACHE_MAX_FILES=50           # 0 disables the cap
+AUDIO_DIR=                       # defaults to an "audio" folder next to the DB
 ```
+
+## Read-aloud audio
+
+Article pages have a **Listen** button on the full text, with pause/resume and a
+seekable progress bar.
+
+With `TTS_PROVIDER=none` it uses the browser's built-in speech, which depends on
+voices installed on the reader's device — often absent or wrong-accented for
+Finnish. `TTS_PROVIDER=gemini` serves real synthesised audio instead, using the
+same `GEMINI_API_KEY` the pipeline already uses. Get one free at
+[aistudio.google.com/apikey](https://aistudio.google.com/apikey) — no billing
+setup required.
+
+Audio is generated **lazily on first listen**, not during the pipeline, and then
+cached on disk under `AUDIO_DIR` (the Fly volume in production). Most processed
+articles are never listened to, so this avoids paying to synthesise audio nobody
+hears. Each article/language/level costs exactly one synthesis regardless of how
+many people play it. If synthesis fails, the front-end silently falls back to
+browser speech.
+
+Only the full text has audio — the sentence-by-sentence list does not.
+
+### Audio format
+
+Gemini's API returns raw PCM with no output-format option, so `ffmpeg` compresses
+it locally (~6x smaller as MP3, ~9x as Opus). `ffmpeg` is installed in the Docker
+image; without it, audio is stored as uncompressed WAV instead.
+
+Set `TTS_AUDIO_FORMAT=mp3` (default) or `opus`. MP3 plays everywhere; Opus is
+~35% smaller at equivalent speech quality but Ogg/Opus support on Safari/iOS has
+been unreliable, so it's only worth it if you know your readers aren't there.
+
+The cache filename carries the stored format, and the `Content-Type` is derived
+from the file actually on disk, so changing codec generates fresh files rather
+than serving bytes that contradict the header.
+
+### Cache size
+
+`TTS_CACHE_MAX_FILES` (default 50) caps how many files are kept. Past that, the
+least-recently-played is deleted after each new synthesis; playing an article
+refreshes its timestamp, so popular articles survive. Eviction is safe — a pruned
+article just costs one synthesis the next time somebody plays it. Set `0` to
+disable the cap. Prune manually with:
+
+```bash
+python -m services.tts_service --prune        # apply the configured cap
+python -m services.tts_service --prune 20     # or an explicit one
+```
+
+### Picking a voice
+
+Voices are language-neutral names — the model infers the language from the text,
+so there is no per-locale voice to choose. `Kore` is the default.
+
+```bash
+python -m services.tts_service --list-voices
+python -m services.tts_service --say "Tänään alkoi uusi kouluvuosi." --voice Puck
+```
+
+Delete the cached file for an article after changing voice or model, or you will
+keep hearing the old version.
 
 ## Spam protection
 
@@ -149,6 +217,7 @@ Persistent SQLite lives on a Fly volume mounted at `/data`.
 - `api/main.py` — FastAPI routes
 - `services/news_service.py` — ingestion, LLM pipeline, database
 - `services/admin_service.py` — admin dashboards, cost tracking
+- `services/tts_service.py` — read-aloud synthesis with on-disk caching
 - `templates/` — Jinja2 HTML templates
 - `Dockerfile` — builds Tailwind CSS and runs uvicorn
 - `services/antibot.py` — honeypot, time trap, email/username validation, per-IP quotas

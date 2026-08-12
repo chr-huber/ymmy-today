@@ -11,3 +11,8 @@ __pycache__/
 tailwindcss
 *.log
 static/css/tailwind.css
+audio/
+# Local TTS audition output (services/tts_service.py --say)
+sample.mp3
+sample.opus
+sample.wav

@@ -48,7 +48,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -163,6 +163,12 @@ from services.news_service import (
     archive_old_articles,
     list_archived_articles,
     ARTICLE_TOPICS,
+)
+from services.tts_service import (
+    TTSError,
+    get_or_create_audio,
+    is_configured as tts_is_configured,
+    media_type_for as tts_media_type_for,
 )
 
 # DEFAULT_TARGET_LANGUAGE / DEFAULT_TARGET_LEVEL still used for single-article process form defaults
@@ -883,6 +889,7 @@ async def article_view(
         "cefr_levels": CEFR_LEVELS,
             "due_count": due_count,
             "current_user": user,
+            "tts_enabled": tts_is_configured(),
         },
     )
 
@@ -1571,6 +1578,64 @@ async def admin_newsletter_delete_unconfirmed(
 
 
 # ── API endpoints (JSON, for Alpine.js) ───────────────────────────────────────
+
+@app.get("/api/audio/{article_id}")
+@limiter.limit("30/minute")
+async def api_article_audio(
+    request: Request,
+    article_id: int,
+    language: Optional[str] = None,
+    level: Optional[str] = None,
+    user: Optional[dict] = Depends(get_optional_user),
+):
+    """Serve the read-aloud MP3, synthesising it on first request.
+
+    Generation is lazy and cached on disk, so each article/language/level costs
+    one synthesis no matter how many people listen.
+    """
+    if not tts_is_configured():
+        raise HTTPException(status_code=503, detail="Audio is not configured")
+
+    settings = _get_settings(request, user)
+    if language in LEARNING_LANGUAGES:
+        settings["language"] = language
+    if level in CEFR_LEVELS:
+        settings["level"] = level
+
+    data = get_article(
+        article_id,
+        target_language=settings["language"],
+        target_level=settings["level"],
+    )
+    if data is None or not data["processed"]:
+        raise HTTPException(status_code=404, detail="Article not found")
+
+    processed = data["processed"]
+    # Skip the first sentence: it is the headline, already shown as the page title.
+    sentences = split_sentences(processed["simple_text"], max_sentences=10)[1:]
+    text = " ".join(sentences).strip()
+    if not text:
+        raise HTTPException(status_code=404, detail="Nothing to read")
+
+    # The audio is derived from the article's assigned level, which may differ
+    # from the requested one — cache under what was actually used.
+    used_level = data["article"].get("assigned_level") or settings["level"]
+
+    try:
+        path = get_or_create_audio(article_id, settings["language"], used_level, text)
+    except TTSError as exc:
+        logging.warning("TTS failed for article %s: %s", article_id, exc)
+        raise HTTPException(status_code=502, detail="Audio generation failed")
+
+    if path is None:
+        raise HTTPException(status_code=503, detail="Audio is not configured")
+
+    return FileResponse(
+        path,
+        media_type=tts_media_type_for(path),
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
+
 
 @app.post("/api/toggle-save/{vocab_item_id}")
 @limiter.limit("60/minute")
