@@ -40,9 +40,11 @@ Routes:
 
 import logging
 import os
+import re
 import secrets
 import hashlib
 import time
+from urllib.parse import quote
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
@@ -164,6 +166,7 @@ from services.news_service import (
     list_archived_articles,
     ARTICLE_TOPICS,
 )
+from services import wordbank
 from services.tts_service import (
     TTSError,
     get_or_create_audio,
@@ -408,6 +411,99 @@ def _source_color(source_name: str) -> str:
         "Tagesschau": "orange",
     }
     return palette.get(source_name, "gray")
+
+
+# ── Tappable words in the full text ───────────────────────────────────────────
+
+# Articles and other short function words carry no useful dictionary entry, and
+# stripping them keeps the lookup surface to words worth asking about.
+_GERMAN_ARTICLES = {
+    "der", "die", "das", "den", "dem", "des",
+    "ein", "eine", "einen", "einem", "einer", "eines",
+}
+
+_DICTIONARY_URLS = {
+    "Finnish": "https://www.sanakirja.fi/finnish-english/{word}",
+    "German": "https://www.dwds.de/wb/{word}",
+}
+
+
+def _dictionary_url(word: str, language: str) -> str:
+    template = _DICTIONARY_URLS.get(language)
+    if not template:
+        return ""
+    return template.format(word=quote(word, safe=""))
+
+
+def _tokenize_for_lookup(
+    text: str, vocabulary: List[Dict[str, Any]], language: str
+) -> List[Dict[str, Any]]:
+    """Split text into word / non-word tokens, annotated with known translations.
+
+    Words that appear in the article's own vocabulary get their translation
+    inline for free; everything else falls back to a dictionary link. Joining
+    every token's "text" reproduces the input exactly, which matters because the
+    read-aloud button reads this paragraph's textContent.
+    """
+    known: Dict[str, Dict[str, Any]] = {}
+    for word in vocabulary or []:
+        entry = {
+            "base": word.get("base_form") or "",
+            "translation": word.get("translation") or "",
+            "form": word.get("grammatical_form") or "",
+            "used_translation": word.get("used_form_translation") or "",
+        }
+        # The inflected form is what actually appears in the text; the base form
+        # is a useful second chance when the two happen to coincide.
+        for key in (word.get("used_form"), word.get("base_form")):
+            if key:
+                known.setdefault(key.strip().lower(), entry)
+
+    tokens: List[Dict[str, Any]] = []
+    # \w with re.UNICODE keeps ä/ö/ü/ß inside words rather than splitting on them.
+    for chunk in re.findall(r"[^\W\d_]+(?:['’-][^\W\d_]+)*|.", text, re.UNICODE):
+        if not re.match(r"[^\W\d_]", chunk, re.UNICODE):
+            tokens.append({"text": chunk, "word": False})
+            continue
+
+        lookup = chunk.lower()
+        if language == "German" and lookup in _GERMAN_ARTICLES:
+            tokens.append({"text": chunk, "word": False})
+            continue
+
+        entry = known.get(lookup)
+        if entry:
+            token = {
+                "known": True,
+                "base": entry["base"],
+                "translation": entry["used_translation"] or entry["translation"],
+                "form": entry["form"],
+            }
+        else:
+            # Fall back to the bundled beginner word list. These are not marked
+            # as "known" so they stay visually plain — only the article's own
+            # key words are underlined.
+            banked = wordbank.lookup(chunk) if language == "Finnish" else None
+            token = {
+                "known": False,
+                "base": banked[0] if banked else "",
+                "translation": banked[1] if banked else "",
+                "form": "",
+            }
+
+        # Dictionaries resolve a base form far more reliably than an inflected
+        # one, so look up "katu" rather than "kaduilla" where we can tell.
+        if language == "Finnish" and not token["base"]:
+            token["base"] = wordbank.best_lemma(chunk)
+        target = token["base"] or chunk
+
+        token.update({
+            "text": chunk,
+            "word": True,
+            "url": _dictionary_url(target, language),
+        })
+        tokens.append(token)
+    return tokens
 
 
 # ── Login / logout ────────────────────────────────────────────────────────────
@@ -867,6 +963,12 @@ async def article_view(
     age = _age_label(article.get("published") or article.get("created_at"))
     source_color = _source_color(article["source_name"])
 
+    # Tappable words for the full-text paragraph (the headline is shown above).
+    full_text = " ".join(p["target"] for p in paired[1:]).strip()
+    full_text_tokens = _tokenize_for_lookup(
+        full_text, data["vocabulary"], settings["language"]
+    )
+
     if user_id is not None:
         due_count = get_due_count_for_user(user_id, target_language=settings["language"], target_level=settings["level"])
         if not to_int(article.get("is_read", 0)):
@@ -882,6 +984,8 @@ async def article_view(
         "vocabulary": data["vocabulary"],
         "grammar": data["grammar"],
         "paired": paired,
+        "full_text_tokens": full_text_tokens,
+        "wordbank_source": wordbank.source_url() if settings["language"] == "Finnish" else "",
         "age": age,
         "source_color": source_color,
         "settings": settings,

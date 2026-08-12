@@ -90,8 +90,38 @@
       </button>
     </div>
   </div>
-  <div class="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 px-4 py-3">
-    <p x-ref="fullText" class="text-sm leading-relaxed text-stone-700 dark:text-stone-200">{{ paired[1:] | map(attribute='target') | join(' ') }}</p>
+  <div class="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 px-4 py-3 relative"
+       x-data="wordLookup()" @click.outside="close()" @keydown.escape.window="close()">
+    <p x-ref="fullText" class="text-sm leading-relaxed text-stone-700 dark:text-stone-200">{#-
+      -#}{% for t in full_text_tokens %}{% if t.word %}<span
+        {# tojson escapes ' but not ", so the attribute must be single-quoted #}
+        @click='show($event, {{ t.text | tojson }}, {{ t.translation | tojson }}, {{ t.base | tojson }}, {{ t.form | tojson }}, {{ t.url | tojson }})'
+        class="cursor-pointer rounded-sm hover:bg-finnish-100 dark:hover:bg-finnish-900/40 transition-colors{% if t.known %} underline decoration-dotted decoration-finnish-300 underline-offset-4{% endif %}"
+        >{{ t.text }}</span>{% else %}{{ t.text }}{% endif %}{% endfor %}{#-
+    -#}</p>
+
+    <!-- Word popover -->
+    <div x-show="open" x-cloak
+         x-transition:enter="transition ease-out duration-100"
+         x-transition:enter-start="opacity-0 scale-95"
+         x-transition:enter-end="opacity-100 scale-100"
+         :style="`left: ${x}px; top: ${y}px`"
+         class="absolute z-30 -translate-x-1/2 max-w-[15rem] bg-stone-800 dark:bg-stone-700 text-white rounded-lg shadow-lg px-3 py-2">
+      <p class="text-sm font-medium" x-text="word"></p>
+      <template x-if="translation">
+        <div>
+          <p class="text-xs text-stone-200 mt-0.5" x-text="translation"></p>
+          <p class="text-[11px] text-stone-400 mt-0.5" x-show="form" x-text="form"></p>
+        </div>
+      </template>
+      <a :href="url" x-show="url" target="_blank" rel="noopener"
+         class="inline-flex items-center gap-1 text-[11px] text-finnish-200 hover:text-white mt-1.5 underline underline-offset-2">
+        Dictionary
+        <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+        </svg>
+      </a>
+    </div>
 
     <!-- Scrubber, only for real audio: browser speech exposes no position -->
     <div x-show="hasServerAudio && (playing || paused)" x-cloak
@@ -257,6 +287,11 @@
 <div class="mt-10 pt-4 border-t border-stone-200 dark:border-stone-800">
   <p class="text-[11px] text-stone-400 dark:text-stone-500 text-center tracking-wide">
     AI-assisted learning
+    {% if wordbank_source %}
+    · beginner vocabulary from
+    <a href="{{ wordbank_source }}" target="_blank" rel="noopener noreferrer"
+       class="hover:text-finnish-700 hover:underline transition-colors">uusikielemme.fi</a>
+    {% endif %}
     <!-- 
     · powered by
     <a href="https://mistral.ai" target="_blank" rel="noopener noreferrer" class="hover:text-finnish-700 hover:underline transition-colors">Mistral</a>
@@ -266,6 +301,43 @@
 
 <script>
   document.addEventListener('alpine:init', () => {
+    Alpine.data('wordLookup', () => ({
+      open: false,
+      word: '',
+      translation: '',
+      base: '',
+      form: '',
+      url: '',
+      x: 0,
+      y: 0,
+
+      show(event, word, translation, base, form, url) {
+        // Tapping the already-open word closes it, so a mis-tap is easy to undo.
+        if (this.open && this.word === word) { this.close(); return; }
+
+        const span = event.target.getBoundingClientRect();
+        const box = this.$el.getBoundingClientRect();
+        this.x = span.left - box.left + span.width / 2;
+        // Sit just below the word, in the container's coordinate space.
+        this.y = span.bottom - box.top + 6;
+
+        // Show the dictionary form when it differs from the inflected one, so
+        // the reader learns what to look up next time.
+        this.word = base && base.toLowerCase() !== word.toLowerCase()
+          ? `${word} · ${base}`
+          : word;
+        this.translation = translation;
+        this.base = base;
+        this.form = form;
+        this.url = url;
+        this.open = true;
+      },
+
+      close() {
+        this.open = false;
+      },
+    }));
+
     Alpine.data('speaker', (lang, hasServerAudio, audioUrl) => {
     // Held in the closure, not on the component: Alpine wraps its state in a
     // reactive Proxy, and proxying a media element breaks property writes such

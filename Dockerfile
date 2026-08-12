@@ -5,7 +5,10 @@ WORKDIR /app
 # Install Tailwind CSS standalone CLI and supercronic.
 # ffmpeg compresses TTS audio (Gemini returns raw PCM); without it the cache
 # stores much larger WAV files instead.
-RUN apt-get update && apt-get install -y curl ffmpeg && rm -rf /var/lib/apt/lists/* \
+# libvoikko1 + voikko-fi (~5 MB) lemmatise Finnish for tap-to-translate. The
+# Python binding comes from pip, not apt, because apt's would target Debian's
+# python3 rather than this image's.
+RUN apt-get update && apt-get install -y curl ffmpeg libvoikko1 voikko-fi && rm -rf /var/lib/apt/lists/* \
     && curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.17/tailwindcss-linux-x64 \
     && chmod +x tailwindcss-linux-x64 \
     && mv tailwindcss-linux-x64 /usr/local/bin/tailwindcss \
