@@ -6,10 +6,10 @@
 <div class="flex items-center justify-between mb-4">
   <div>
     <h1 class="font-serif text-lg font-semibold">
-      {% if older %}Earlier{% else %}Today{% endif %} · <span class="text-stone-500 dark:text-stone-400 font-normal">{{ settings.language }}</span>
+      {% if older %}Earlier{% else %}Latest{% endif %} · <span class="text-stone-500 dark:text-stone-400 font-normal">{{ settings.language }}</span>
     </h1>
     <p class="text-xs text-stone-400 dark:text-stone-500 mt-0.5">
-      {% if older %}Older articles{% else %}{{ today_label }}{% if updated_at %} · Updated {{ updated_at }}{% endif %}{% endif %}
+      {% if older %}Older articles{% elif updated_at %}Updated {{ updated_at }}{% endif %}
     </p>
   </div>
   <div class="flex items-center gap-0.5 flex-wrap justify-end">
@@ -55,24 +55,31 @@
   <p class="font-medium mb-1">No articles yet for {{ settings.language }}{% if current_level %} {{ current_level }}{% endif %}</p>
   <p class="text-sm">Go have a coffee while we update the page ☕</p>
 </div>
-{% if not older %}
-<div class="flex items-center justify-center mt-8">
-  <a href="/?older=1{% if current_level %}&level={{ current_level }}{% endif %}"
-      class="text-xs text-stone-400 dark:text-stone-500 hover:text-finnish-700 transition-colors">
-    Show older →
-  </a>
-</div>
-{% endif %}
 
 {% else %}
+{% for group in feed_days %}
+<section class="{% if not loop.first %}mt-8{% endif %}">
+  <!-- Day heading: articles are grouped by the day ymmy processed them -->
+  <div class="flex items-baseline justify-between mb-2 px-1">
+    <h2 class="text-xs font-semibold text-stone-600 dark:text-stone-300 uppercase tracking-wide">
+      {{ group.label }}
+      {% if group.new_count %}
+      <span class="normal-case tracking-normal font-medium text-finnish-600 dark:text-finnish-400">· {{ group.new_count }} new</span>
+      {% endif %}
+    </h2>
+    <span class="text-xs text-stone-400 dark:text-stone-500">{{ group.articles|length }} article{{ 's' if group.articles|length != 1 else '' }}</span>
+  </div>
 <div class="space-y-2">
-  {% for article in articles %}
+  {% for article in group.articles %}
   <a href="/article/{{ article.id }}"
       class="block bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 px-4 py-3.5 hover:border-finnish-300 hover:shadow-sm transition-all group
             {% if current_user and article.is_read %}opacity-60{% endif %}">
     <div class="flex items-start gap-3">
       <div class="flex-1 min-w-0">
-        <div class="flex items-center gap-2 mb-1">
+        <div class="flex items-center flex-wrap gap-x-2 gap-y-1 mb-1 whitespace-nowrap">
+          {% if article.is_new %}
+          <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-finnish-600 text-white">New</span>
+          {% endif %}
           {% if article.assigned_level %}
           <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-finnish-100 dark:bg-finnish-900/30 text-finnish-700 dark:text-finnish-300">
             {{ article.assigned_level }}
@@ -107,6 +114,8 @@
   </a>
   {% endfor %}
 </div>
+</section>
+{% endfor %}
 
 <div class="flex items-center justify-center gap-4 mt-8">
   {% if older and page > 0 %}
@@ -115,8 +124,7 @@
     ← Newer
   </a>
   {% endif %}
-  <p class="text-xs text-stone-400 dark:text-stone-500">{{ articles|length }} article{{ 's' if articles|length != 1 else '' }}</p>
-  {% if not older %}
+  {% if not older and has_next %}
   <a href="/?older=1{% if current_level %}&level={{ current_level }}{% endif %}{% if current_topic %}&topic={{ current_topic }}{% endif %}"
       class="text-xs text-stone-400 dark:text-stone-500 hover:text-finnish-700 transition-colors">
     Show older →

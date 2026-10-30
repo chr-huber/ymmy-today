@@ -143,6 +143,7 @@ from services.news_service import (
     ingest_from_rss,
     init_db,
     list_articles,
+    list_feed_days,
     mark_article_read,
     mark_article_read_for_user,
     mark_article_unread,
@@ -369,6 +370,63 @@ def _get_settings(request: Request, user: Optional[dict] = None) -> dict:
     if level not in CEFR_LEVELS:
         level = DEFAULT_TARGET_LEVEL
     return {"language": language, "level": level}
+
+
+FEED_DAYS_PER_PAGE = 3
+# Articles processed this close to the newest one came from the same pipeline
+# slot (slots run ten hours apart and take minutes), so they are marked new.
+FEED_NEW_WINDOW = timedelta(hours=3)
+
+
+def _feed_day_label(day: str) -> str:
+    """'Today', 'Yesterday' or 'Monday, October 28' for a UTC date string."""
+    d = datetime.strptime(day, "%Y-%m-%d").date()
+    today = datetime.now(timezone.utc).date()
+    if d == today:
+        return "Today"
+    if d == today - timedelta(days=1):
+        return "Yesterday"
+    return f"{d:%A, %B} {d.day}"
+
+
+def _group_feed_by_day(
+    articles: List[Dict[str, Any]],
+    days: List[str],
+    latest_processed_at: Optional[str],
+    signed_in: bool,
+) -> List[Dict[str, Any]]:
+    """Bucket feed articles under their processing day, newest first.
+
+    Flags articles from the latest pipeline slot as new; for signed-in readers,
+    an article they have already read is no longer new.
+    """
+    newest = parse_iso_timestamp(latest_processed_at or "")
+    buckets: Dict[str, List[Dict[str, Any]]] = {day: [] for day in days}
+    seen = set()
+    for a in articles:
+        processed = parse_iso_timestamp(a.get("processed_at") or "")
+        # SQLite's date() normalises to UTC, so do the same here.
+        day = processed.astimezone(timezone.utc).date().isoformat() if processed else None
+        # The level-filtered query can return an article once per processed level.
+        if day not in buckets or a["id"] in seen:
+            continue
+        seen.add(a["id"])
+        a["is_new"] = bool(
+            newest and processed >= newest - FEED_NEW_WINDOW
+            and not (signed_in and a.get("is_read"))
+        )
+        buckets[day].append(a)
+
+    groups = []
+    for day in days:
+        items = sorted(buckets[day], key=lambda a: a.get("processed_at") or "", reverse=True)
+        if items:
+            groups.append({
+                "label": _feed_day_label(day),
+                "articles": items,
+                "new_count": sum(1 for a in items if a["is_new"]),
+            })
+    return groups
 
 
 def _age_label(published: Optional[str]) -> str:
@@ -788,35 +846,26 @@ async def index(
         topic = None
 
     page = max(0, page)
-    # Latest feed: always last 4 runs. Older: paginate runs 4+
-    run_offset = 4 + page * 4 if older else 0
+    # The feed is paged by processing day (UTC), FEED_DAYS_PER_PAGE days at a
+    # time, counting only days that have articles for these filters. The latest
+    # view is the first page; ?older=1&page=N continues after it.
+    day_offset = (page + 1) * FEED_DAYS_PER_PAGE if older else 0
+    days = list_feed_days(
+        settings["language"],
+        target_level=level,
+        topic=topic,
+        limit=FEED_DAYS_PER_PAGE + 1,
+        offset=day_offset,
+    )
+    has_next = len(days) > FEED_DAYS_PER_PAGE
+    days = days[:FEED_DAYS_PER_PAGE]
     articles = list_articles(
         target_language=settings["language"],
         target_level=level,
         user_id=user_id,
-        runs_per_page=4,
-        run_offset=run_offset,
         topic=topic,
+        processed_days=days,
     )
-    # Check if there are articles/runs beyond the current page
-    if older:
-        with db_connect() as _db:
-            next_runs = _db.execute(
-                "SELECT id FROM auto_pick_runs ORDER BY id DESC LIMIT 4 OFFSET ?",
-                (run_offset + 4,),
-            ).fetchall()
-        if next_runs:
-            has_next = True
-        else:
-            # Mirror list_articles fallback: paginate processed_articles directly
-            next_sql_offset = (run_offset + 4) * 4
-            with db_connect() as _db:
-                has_next = _db.execute(
-                    "SELECT 1 FROM processed_articles ORDER BY created_at DESC LIMIT 1 OFFSET ?",
-                    (next_sql_offset,),
-                ).fetchone() is not None
-    else:
-        has_next = False
 
     # Fetch all previews in a single query
     previews: dict = {}
@@ -846,6 +895,7 @@ async def index(
 
     # Use global latest processing time so "updated at" reflects the last pipeline run
     latest_processed_at = get_latest_processed_at(target_language=settings["language"])
+    feed_days = _group_feed_by_day(articles, days, latest_processed_at, signed_in=user_id is not None)
 
     if user_id is not None:
         due_count = get_due_count_for_user(user_id, target_language=settings["language"], target_level=level)
@@ -855,6 +905,7 @@ async def index(
     context = await get_template_context(request)
     context.update({
         "articles": articles,
+        "feed_days": feed_days,
         "settings": settings,
         "current_level": level,
         "current_topic": topic,
@@ -865,7 +916,6 @@ async def index(
         "cefr_levels": CEFR_LEVELS,
         "article_topics": ARTICLE_TOPICS,
         "due_count": due_count,
-        "today_label": f"{(_now := datetime.now(timezone.utc)):%A, %B} {_now.day}",
         "updated_at": _age_label(latest_processed_at),
         "current_user": user,
     },

@@ -2235,6 +2235,47 @@ JSON:"""
     return _heuristic_level(article_text, title)
 
 
+def list_feed_days(
+    target_language: str,
+    target_level: Optional[str] = None,
+    topic: Optional[str] = None,
+    limit: int = 3,
+    offset: int = 0,
+) -> List[str]:
+    """Return the UTC dates (YYYY-MM-DD, newest first) on which articles visible
+    in the reader feed were processed, for paging the feed one day at a time.
+
+    The conditions mirror the reader queries in list_articles(), so a day is
+    only listed when that page will actually show something for these filters.
+    """
+    level_filter = "a.assigned_level = ?" if target_level else "p.target_level = a.assigned_level"
+    params: List[Any] = [target_language]
+    if target_level:
+        params.append(target_level)
+    topic_filter = ""
+    if topic:
+        topic_filter = " AND a.topic = ?"
+        params.append(topic)
+    params.extend([limit, offset])
+    with db_connect() as db:
+        rows = db.execute(
+            f"""
+            SELECT DISTINCT date(p.created_at) AS day
+            FROM articles a
+            JOIN processed_articles p ON p.article_id = a.id
+            WHERE p.target_language = ?
+              AND {level_filter}
+              AND LOWER(a.title) NOT LIKE '%briefing%'
+              AND (a.is_archived IS NULL OR a.is_archived = 0)
+              {topic_filter}
+            ORDER BY day DESC
+            LIMIT ? OFFSET ?
+            """,
+            params,
+        ).fetchall()
+    return [r["day"] for r in rows if r["day"]]
+
+
 def list_articles(
     target_language: Optional[str] = None,
     target_level: Optional[str] = None,
@@ -2244,6 +2285,7 @@ def list_articles(
     topic: Optional[str] = None,
     runs_per_page: int = 4,
     run_offset: int = 0,
+    processed_days: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     # Build optional date filter for reader queries
     # Filter by a.created_at (ingestion time) so RSS articles with old publish dates
@@ -2251,9 +2293,17 @@ def list_articles(
     date_filter = ""
     date_params: List[Any] = []
 
+    # Day-based filtering (the reader feed): articles processed on these UTC
+    # dates, as listed by list_feed_days().
+    if target_language and processed_days is not None:
+        if not processed_days:
+            return []
+        placeholders = ",".join("?" * len(processed_days))
+        date_filter += f" AND date(p.created_at) IN ({placeholders})"
+        date_params.extend(processed_days)
     # Run-based filtering: show articles from the last N pipeline runs, offset by run_offset.
     # Runs may be stored with NULL target_language (multi-language runs), so don't filter by language here.
-    if target_language and runs_per_page > 0:
+    elif target_language and runs_per_page > 0:
         with db_connect() as _db:
             run_rows = _db.execute(
                 """
