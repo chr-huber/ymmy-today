@@ -188,7 +188,7 @@ def main() -> int:
 
     payload = {
         "_source": "https://uusikielemme.fi/vocabulary-for-beginners-finnish-vocabulary",
-        "_note": "Vocabulary compiled by uusikielemme.fi. Credited on article pages.",
+        "_note": "Vocabulary compiled by uusikielemme.fi.",
         "_scraped": date.today().isoformat(),
         "_pages": len(sources),
         "words": dict(sorted(entries.items())),

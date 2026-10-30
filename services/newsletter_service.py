@@ -337,7 +337,7 @@ def send_digest_to_subscriber(subscriber: dict, articles: list, dry_run: bool = 
         intro=intro,
         unsubscribe_url=unsubscribe_url,
         base_url=APP_BASE_URL,
-        week_label=datetime.now(timezone.utc).strftime("%B %-d, %Y"),
+        week_label=f"{(_now := datetime.now(timezone.utc)):%B} {_now.day}, {_now.year}",
     )
 
     # Plain-text fallback

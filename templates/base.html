@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/tailwind.css?v=20260310">
+  <link rel="stylesheet" href="/static/css/tailwind.css?v=20261030">
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <style>[x-cloak] { display: none !important; }</style>
   <script>if (localStorage.getItem('dark-mode') === 'true') document.documentElement.classList.add('dark');</script>
@@ -45,8 +45,9 @@
         </a>
         {% endif %}
 
-        <!-- Subscribe button (hidden when the digest is switched off in /admin) -->
-        {% if newsletter_enabled %}
+        <!-- Subscribe button: signed-in readers only, and hidden when the digest
+             is switched off in /admin -->
+        {% if newsletter_enabled and current_user %}
         <button @click="subscribeOpen = true"
                 class="flex items-center gap-1.5 text-stone-400 hover:text-stone-600 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-lg px-2 h-8 transition-colors"
                 :class="subscribeOpen ? 'bg-stone-100 dark:bg-stone-800 text-stone-600' : ''"
@@ -152,7 +153,7 @@
   </header>
 
   <!-- Subscribe modal (outside header so fixed positioning works) -->
-  {% if newsletter_enabled %}
+  {% if newsletter_enabled and current_user %}
   <div x-show="subscribeOpen" x-cloak
        class="fixed inset-0 z-50 flex items-center justify-center p-4"
        @keydown.escape.window="subscribeOpen = false">
@@ -177,7 +178,7 @@
           <label for="sub-website">Website</label>
           <input type="text" id="sub-website" name="{{ honeypot_field }}" tabindex="-1" autocomplete="off">
         </div>
-        <input type="email" name="email" required placeholder="your@email.com"
+        <input type="email" name="email" required placeholder="your@email.com" value="{{ current_user.email or '' }}"
                class="border border-stone-200 dark:border-stone-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-finnish-400 w-full" />
         <input type="hidden" name="language" value="Finnish">
         <input type="hidden" name="level" value="">

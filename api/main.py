@@ -857,7 +857,7 @@ async def index(
         "cefr_levels": CEFR_LEVELS,
         "article_topics": ARTICLE_TOPICS,
         "due_count": due_count,
-        "today_label": datetime.now(timezone.utc).strftime("%A, %B %-d"),
+        "today_label": f"{(_now := datetime.now(timezone.utc)):%A, %B} {_now.day}",
         "updated_at": _age_label(latest_processed_at),
         "current_user": user,
     },
@@ -985,7 +985,6 @@ async def article_view(
         "grammar": data["grammar"],
         "paired": paired,
         "full_text_tokens": full_text_tokens,
-        "wordbank_source": wordbank.source_url() if settings["language"] == "Finnish" else "",
         "age": age,
         "source_color": source_color,
         "settings": settings,
@@ -1447,9 +1446,13 @@ async def subscribe(
     email: str = Form(...),
     language: str = Form(DEFAULT_TARGET_LANGUAGE),
     level: Optional[str] = Form(default=None),
+    user: Optional[dict] = Depends(get_optional_user),
 ):
     if not get_feature_flags()["newsletter_enabled"]:
         return RedirectResponse(url="/?msg=newsletter_closed", status_code=303)
+    # Signing up is for account holders only, which keeps bots off the list.
+    if user is None:
+        return RedirectResponse(url="/login", status_code=303)
 
     if not await verify_csrf_token(request):
         raise HTTPException(status_code=403, detail="Invalid CSRF token")
@@ -1697,6 +1700,8 @@ async def api_article_audio(
     Generation is lazy and cached on disk, so each article/language/level costs
     one synthesis no matter how many people listen.
     """
+    if user is None:
+        raise HTTPException(status_code=401, detail="Sign in to listen")
     if not tts_is_configured():
         raise HTTPException(status_code=503, detail="Audio is not configured")
 

@@ -25,6 +25,9 @@ LLM_PROVIDER = os.getenv("LLM_PROVIDER", "mistral")  # "mistral", "deepseek", "c
 REVIEW_LLM_PROVIDER = os.getenv("REVIEW_LLM_PROVIDER", "qwen")  # second-pass reviewer, defaults to qwen
 MISTRAL_MODEL = os.getenv("MISTRAL_MODEL", "mistral-small-latest")
 REVIEW_MISTRAL_MODEL = os.getenv("REVIEW_MISTRAL_MODEL", MISTRAL_MODEL)
+# Retried once for step 2 when the review provider errors or returns bad JSON.
+# Mistral as a reviewer uses REVIEW_MISTRAL_MODEL. Empty disables the fallback.
+REVIEW_FALLBACK_PROVIDER = os.getenv("REVIEW_FALLBACK_PROVIDER", "mistral")
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
@@ -1557,6 +1560,51 @@ def _call_llm_api(provider: str, prompt: str, system_prompt: str, is_review: boo
         return {"error": f"{provider.upper()} API response parsing failed: {e}"}
 
 
+def _call_review_llm(
+    review_provider: str,
+    prompt: str,
+    system_prompt: str,
+    article_id: Optional[int] = None,
+    target_language: Optional[str] = None,
+    run_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Run step 2 and parse its JSON, retrying once on REVIEW_FALLBACK_PROVIDER.
+
+    Without this, one failed review call drops the article for that language.
+    Returns {'parsed': dict, 'tokens': int, 'provider': str} on success, or
+    {'error': str} when every attempt failed.
+    """
+    attempts = [review_provider]
+    fallback = REVIEW_FALLBACK_PROVIDER
+    if fallback and fallback != review_provider and get_provider_api_key(fallback):
+        attempts.append(fallback)
+
+    errors = []
+    for provider in attempts:
+        result = _call_llm_api(provider, prompt, system_prompt, is_review=True)
+        if "error" in result:
+            errors.append(result["error"])
+        else:
+            try:
+                parsed = parse_json_object(result["content"])
+                return {"parsed": parsed, "tokens": result.get("tokens", 0), "provider": provider}
+            except (TypeError, json.JSONDecodeError) as e:
+                errors.append(f"Step 2 JSON parsing failed ({provider}): {e}")
+
+        if provider != attempts[-1]:
+            _log_pipeline_event(
+                stage="process",
+                message=f"Article {article_id} ({target_language}) step2 failed on {provider}, retrying with {attempts[-1]}: {errors[-1][:200]}",
+                level="warning",
+                run_id=run_id,
+                article_id=article_id,
+                target_language=target_language,
+                provider=provider,
+            )
+
+    return {"error": " | ".join(errors)}
+
+
 
 
 def generate_learning_content(
@@ -1762,14 +1810,13 @@ Otherwise confirm {target_level}.
         f"You are a {target_language} language expert and pedagogy specialist. "
         "Grammar explanations must be in English. Return only valid JSON."
     )
-    step2_result = _call_llm_api(review_provider, step2_prompt, step2_system, is_review=True)
+    step2_result = _call_review_llm(
+        review_provider, step2_prompt, step2_system,
+        article_id=article_id, target_language=target_language,
+    )
     if "error" in step2_result:
         return step2_result
-
-    try:
-        step2_parsed = parse_json_object(step2_result["content"])
-    except (TypeError, json.JSONDecodeError):
-        return {"error": "Step 2: LLM returned a response, but JSON parsing failed."}
+    step2_parsed = step2_result["parsed"]
 
     # Apply corrections patch to step 1 sentences
     corrected_simple = list(step1_simple)
@@ -2033,14 +2080,15 @@ Return JSON only:
         "Grammar explanations must be in English. Return only valid JSON."
     )
 
-    step2_result = _call_llm_api(review_provider, step2_prompt, step2_system, is_review=True)
+    step2_result = _call_review_llm(
+        review_provider, step2_prompt, step2_system,
+        article_id=article_id, target_language=target_language, run_id=run_id,
+    )
     if "error" in step2_result:
         return step2_result
-
-    try:
-        step2_parsed = parse_json_object(step2_result["content"])
-    except (TypeError, json.JSONDecodeError) as e:
-        return {"error": f"Step 2 JSON parsing failed: {e}"}
+    step2_parsed = step2_result["parsed"]
+    # May be the fallback; log whoever actually reviewed.
+    review_provider = step2_result["provider"]
 
     parsed = {}
     for lvl in levels:
