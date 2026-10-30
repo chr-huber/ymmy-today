@@ -16,3 +16,4 @@ audio/
 sample.mp3
 sample.opus
 sample.wav
+.tailwind/

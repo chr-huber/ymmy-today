@@ -5,8 +5,6 @@ import pytest
 from fastapi.testclient import TestClient
 import os
 
-pytestmark = pytest.mark.asyncio
-
 
 def test_static_files():
     """Test that static files are accessible"""
@@ -21,6 +19,7 @@ def test_static_files():
     assert "css" in response.headers['content-type']
 
 
+@pytest.mark.asyncio
 async def test_csrf_token_generation():
     """Test that CSRF tokens are generated properly"""
     # Set up test environment

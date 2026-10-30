@@ -13,36 +13,40 @@ The pipeline selects relevant articles, simplifies them to the target language a
 - **Backend:** Python, FastAPI, Jinja2
 - **Frontend:** Tailwind CSS v3, Alpine.js
 - **Database:** SQLite (local: `ymmy.db`, production: `/data/news.db` on Fly.io volume)
-- **LLM pipeline:** Mistral (article selection + simplification), Claude (review)
+- **LLM pipeline:** Mistral Small (selection, levelling, simplification), Qwen (review, with Mistral Large as fallback) — see [Pipeline](#pipeline)
 - **Hosting:** Fly.io
-- **Scheduling:** supercronic on Fly (`cron` process, 4 pipeline runs/day + weekly digest)
+- **Scheduling:** supercronic on Fly (`cron` process, 2 pipeline runs per weekday + weekly digest)
 
 ## Run locally
 
 ```bash
 python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env   # fill in API keys
-.venv/bin/python -m uvicorn api.main:app --reload --port 8000
+source .venv/bin/activate          # Windows (Git Bash): source .venv/Scripts/activate
+pip install -r requirements.txt -r requirements-dev.txt
+cp .env.example .env               # fill in API keys
+./build_tailwind.sh                # downloads the Tailwind CLI on first run
+python -m uvicorn api.main:app --reload --port 8000
 ```
 
-Open `http://localhost:8000`.
+Open `http://localhost:8000`. Run the tests with `pytest`.
 
-Build CSS (requires [Tailwind CLI](https://github.com/tailwindlabs/tailwindcss/releases)):
+`static/css/tailwind.css` is generated (and git-ignored): rerun `./build_tailwind.sh`
+after changing Tailwind classes in a template, then restart the server so the
+stylesheet link picks up the new version. The Docker image builds it on deploy.
 
-```bash
-./build_tailwind.sh
-```
+Don't put `FLY_*` variables in a local `.env`: `FLY_APP_NAME` makes the app enforce
+its production checks.
 
 ## Environment variables
 
 ```env
 LLM_PROVIDER=mistral              # mistral | deepseek | claude | openai | gemini | qwen
 REVIEW_LLM_PROVIDER=qwen         # second-pass reviewer
+REVIEW_FALLBACK_PROVIDER=mistral # retried once if the reviewer fails; empty disables
 
 MISTRAL_API_KEY=...
 MISTRAL_MODEL=mistral-small-latest
+REVIEW_MISTRAL_MODEL=mistral-large-latest   # used when Mistral reviews
 
 ANTHROPIC_API_KEY=...
 CLAUDE_MODEL=claude-sonnet-4-6
@@ -67,6 +71,13 @@ ADMIN_SESSION_DAYS=30
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=...               # machine credential for cron; required in production
 SESSION_SECRET_KEY=...           # required in production
+APP_BASE_URL=https://ymmy.fly.dev   # used in email links
+
+SMTP_HOST=...                    # sign-in links, confirmations, weekly digest
+SMTP_PORT=587
+SMTP_USERNAME=...
+SMTP_PASSWORD=...
+SMTP_FROM=...
 
 MAX_SIGNUPS_PER_IP_PER_DAY=3
 MAX_SUBSCRIPTIONS_PER_IP_PER_DAY=3
@@ -83,7 +94,8 @@ AUDIO_DIR=                       # defaults to an "audio" folder next to the DB
 ## Read-aloud audio
 
 Article pages have a **Listen** button on the full text, with pause/resume and a
-seekable progress bar.
+seekable progress bar. It is shown to signed-in readers only, and `/api/audio`
+returns `401` to anonymous requests, so anonymous traffic never costs a synthesis.
 
 With `TTS_PROVIDER=none` it uses the browser's built-in speech, which depends on
 voices installed on the reader's device — often absent or wrong-accented for
@@ -143,6 +155,9 @@ keep hearing the old version.
 
 ## Spam protection
 
+The weekly digest sign-up is only offered to signed-in readers; `/subscribe`
+redirects anonymous requests to `/login` without writing anything.
+
 Public forms (`/register`, `/subscribe`) run four layers, in `services/antibot.py`:
 
 1. **Honeypot** — a hidden `website` field; any submission that fills it is dropped.
@@ -193,21 +208,33 @@ remains the way in — so a broken mail setup cannot lock you out of your own pa
 ## Pipeline
 
 The pipeline runs automatically on Fly, via the `cron` process defined in
-`fly.toml` (supercronic reading `crontab`) — weekdays at 05/10/15/20 UTC, plus the
-weekly digest on Sundays at 05:00 UTC. Both jobs `curl` admin endpoints with
-HTTP Basic Auth using the app's `ADMIN_PASSWORD` secret.
+`fly.toml` (supercronic reading `crontab`) — weekdays at 05:00 and 15:00 UTC, plus
+the weekly digest on Sundays at 05:00 UTC. Both jobs `curl` admin endpoints with
+HTTP Basic Auth using the app's `ADMIN_PASSWORD` secret. The digest only goes out
+while it is switched on under "Public features" in `/admin`.
 
 1. **Ingest** — fetch RSS feeds, store new articles
-2. **Select** — Mistral LLM picks the top N most relevant, non-overlapping articles and assigns topic + CEFR level
-3. **Process** — simplify, translate, generate vocabulary and grammar notes per language/level
+2. **Select** — the LLM picks the top N most relevant, non-overlapping articles and assigns topic + CEFR level
+3. **Process** — two LLM steps per article and language (below)
 4. **Log** — run recorded in `auto_pick_runs` for feed pagination
+
+| Step | Setting | Production |
+|---|---|---|
+| Select headlines, rate difficulty | `LLM_PROVIDER` | Mistral Small |
+| Step 1: simplify + translate | `LLM_PROVIDER` | Mistral Small |
+| Step 2: review, key words, grammar notes | `REVIEW_LLM_PROVIDER` | Qwen |
+| Step 2 fallback, if the reviewer errors or returns bad JSON | `REVIEW_FALLBACK_PROVIDER` | Mistral Large |
+| Weekly digest selection + intro | fixed in `newsletter_service.py` | Mistral Small |
+| Read-aloud audio | `TTS_PROVIDER` | Gemini TTS |
+
+A fallback is recorded as a `warning` pipeline event naming the reviewer's error.
 
 Trigger manually via the admin panel at `/admin`.
 
 ## Deploy to Fly.io
 
 ```bash
-fly deploy
+fly deploy        # the winget install names the command flyctl
 ```
 
 Persistent SQLite lives on a Fly volume mounted at `/data`.

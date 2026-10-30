@@ -217,6 +217,14 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 # Serve static files if the directory exists
 static_dir = BASE_DIR / "static"
+
+# Cache-buster for the stylesheet link: static files are cached for an hour, so
+# the URL must change whenever the CSS does. The CSS is built into the Docker
+# image before the app starts, so hashing it once at import is enough.
+_css_path = static_dir / "css" / "tailwind.css"
+templates.env.globals["css_version"] = (
+    hashlib.md5(_css_path.read_bytes()).hexdigest()[:10] if _css_path.exists() else "dev"
+)
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
@@ -1496,7 +1504,9 @@ async def subscribe(
         try:
             send_email(email, "Confirm your ymmy newsletter subscription", html, text)
         except Exception:
-            pass  # Don't fail the request if email fails
+            # Don't fail the request, but leave a trace: without one, a broken
+            # SMTP setup silently strands every new subscriber unconfirmed.
+            logging.exception("Newsletter confirmation email to %s failed", email)
 
     return RedirectResponse(url="/?subscribed=1", status_code=303)
 
